@@ -3,7 +3,12 @@
 python generate_results_summary.py で実行し、results/summary.md を書き出す。
 
 CLAUDE.md 10章の運用ルールに従い、①〜⑤の大指標を主役として1行ずつ結論を出し、
-24項目の評価観点は「内訳・根拠」として各指標に併記する(省略しない)。
+25項目の評価観点は「内訳・根拠」として各指標に併記する(省略しない)。
+
+【プラガブル性(#11)についての注記】`roadmap_consistency_memo.md`の大指標対応表には
+#11(プラガブル性)に対応する大指標が存在しない(1ケース目完走後の振り返りで発覚した、
+資源コスト#24と同種の未対応)。①〜⑤のどこにも無理に押し込めず、レポート末尾に補足として
+別掲する。
 
 【Quintについての注記】動的安全性検証(Quint/TLAモード)は、対応表(SMAS_theorymap.md
 2章)上は②収束性ではなく①到達可能性(+評価観点#16並行安全性、#23打ち切り耐性)を
@@ -26,14 +31,54 @@ from datetime import datetime, timezone
 import yaml
 
 from aggregation import TerminationConfig, run_mechanism
-from agents.rule_based import FluctuatingHonestAgent, GreedyOverstatingAgent
+from agents.llm_mock import ProbabilisticMockAgent
+from agents.llm_real import AnthropicToolUseAgent
+from agents.rule_based import FluctuatingHonestAgent, GreedyOverstatingAgent, HonestRuleBasedAgent
 from engine.incentive_engine import SingleItemVcgEngine, SingleItemVcgParameters
 from environment import EnvironmentClient
+from schemas.agent_schema import Agent, ObservationInput
 from schemas.environment_schema import EnvironmentConfig
 from schemas.incentive_schema import Declaration
-from scenarios.deviation_test import run_three_scene_demo
+from scenarios.deviation_test import run_scene, run_three_scene_demo
 from verification import run_structural_verification
 from verification_kit.montecarlo import run_trials, summarize
+
+
+def check_pluggability() -> str:
+    """プラガブル性(#11): ルールベース/LLMモック/LLM実物が同一のAgentプロトコルを
+    満たし、かつ実際に同じ集約パイプライン(run_scene)へ差し替え可能であることを確認する。
+
+    型の互換性のみを確認し、振る舞いの同等性は主張しない(CLAUDE.md 2章 原則4)。
+    LLM実物は資格情報が無くてもインスタンス化(decide()呼び出し無し)は可能なため、
+    isinstanceによるプロトコル適合チェックにはAPI呼び出しを要しない。
+    """
+    honest = HonestRuleBasedAgent("alice", true_value=10.0)
+    mock = ProbabilisticMockAgent("alice", true_value=10.0)
+    llm_real = AnthropicToolUseAgent("alice", true_value=10.0)
+    conforms = all(isinstance(a, Agent) for a in (honest, mock, llm_real))
+
+    env = EnvironmentClient(EnvironmentConfig(half_life_rounds=3.0, max_trace_age_rounds=10))
+    engine = SingleItemVcgEngine(SingleItemVcgParameters(reserve_price=0.0))
+    ran_with_rule_based = run_scene(
+        "pluggability_check_rule_based",
+        [HonestRuleBasedAgent("alice", true_value=10.0), HonestRuleBasedAgent("bob", true_value=7.0)],
+        engine, env,
+    )
+    ran_with_mock = run_scene(
+        "pluggability_check_mock",
+        [ProbabilisticMockAgent("alice", true_value=10.0, p_honest=1.0), ProbabilisticMockAgent("bob", true_value=7.0, p_honest=1.0)],
+        engine, env,
+    )
+    both_ran = ran_with_rule_based.outcome.result is not None and ran_with_mock.outcome.result is not None
+
+    return (
+        f"{'Pass' if (conforms and both_ran) else 'Fail'} — ルールベース・LLMモック・LLM実物の3実装が"
+        f"同一のAgentプロトコル(schemas/agent_schema.py)を満たす({'確認' if conforms else '不成立'})。"
+        f"ルールベース・LLMモックは同一のrun_scene(①〜③の実パイプライン)に無改造で差し替え可能"
+        f"({'確認' if both_ran else '不成立'})。LLM実物も同じ経路で動作することはdemo_llm_real.pyで"
+        f"実演済み(資格情報が必要なためこのレポートでは自動実行しない)。"
+        f"型の互換性のみを確認しており、振る舞いの同等性(LLMが理論通り動くか)は主張しない。"
+    )
 
 QUINT_SPEC_PATH = "verification_kit/quint/task_allocation.qnt"
 
@@ -173,12 +218,13 @@ def main() -> None:
 
     lines.append(f"### ①到達可能性: {'Yes' if reachability_yes else 'No'}")
     lines.append(
-        f"- 個人合理性(#3): シーン1(正直申告、{len(scene1_honest_utilities)}件)の実現効用はすべて0以上"
+        f"- 個人合理性(#25): シーン1(正直申告、{len(scene1_honest_utilities)}件)の実現効用はすべて0以上"
         f"({'成立' if individual_rationality_holds else '不成立'})。"
     )
     lines.append(
         f"- 権力集中の不在(#14): ⑤構造検証(全{len(verification_report.structural_checks)}項目)が"
         f"{'すべてPass' if verification_report.all_passed else '一部Fail'}(壁による自領域外書き込み拒否を含む)。"
+        f"介入ポート(`EnvironmentClient.record_intervention`)は型定義のみで、本ケースでは未行使のため監視対象外(未検証、`DECISIONS.md` D-21)。"
     )
     lines.append("")
 
@@ -231,6 +277,11 @@ def main() -> None:
         lines.append(f"  - {check.check_name}: {'Pass' if check.passed else 'Fail'}")
     lines.append("- 関手による対応づけ(#15): 2ケース目未着手のため今回は対象外。")
     lines.append(f"- 並行安全性(#16)・打ち切り耐性(#23)の形式的側面: {quint_result}")
+    lines.append("")
+
+    lines.append("## 5大指標に対応表がない評価観点(補足)")
+    lines.append("")
+    lines.append(f"- プラガブル性(#11): {check_pluggability()}")
     lines.append("")
 
     lines.append("---")
