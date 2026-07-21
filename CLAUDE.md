@@ -77,7 +77,7 @@ POMDP、最適化ベースエージェント、構成的アプローチへの格
 | メカニズム実行層 | ストレージから読み取り、定義層のルールを計算・適用 | `aggregation.py`(共通実装。集約計算はファミリーに応じ選択: VCG系の配分決定=割当問題は`scipy`、投票系は`pref_voting`。詳細は`mechanism_catalog.md`結論の注記) |
 | 主体決定層 | 各エージェントの意思決定ロジック | `agents/`(ルールベース→LLMモック→LLM実物の順に実装) |
 | 構造検証層 | 合成則・可換性の検証 | `verification.py`(`DisCoPy`利用) |
-| (横断)アクセス制御 | 誰が何を読み書きできるか | 全層をまたぐPydanticバリデーション |
+| (横断)アクセス制御 | 誰が何を読み書きできるか | 全層をまたぐPydanticバリデーション(プロセス内の型検証に留まる。本番実装での認証・認可の執行点は`scope_exclusions_and_deferrals.md` Part 0「壁の執行力の限界」参照) |
 
 **①環境層の痕跡の中身(`Trace.payload`)は、②と同じA/B構造(ジェネリック型)にする**。「何でも入るdict」にしない。`process_trace: Optional[dict] = None`を型に含めておく(中身は実装しない)。
 
