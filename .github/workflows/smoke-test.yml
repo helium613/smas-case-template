@@ -1,0 +1,23 @@
+# PR・mainへのpushごとに疎通確認スクリプト(smoke_test.py)を自動実行する。
+# smoke_test.py は①〜⑤層の疎通+3シーンデモ+モンテカルロ(耐戦略性)の
+# 全チェックを含むため、これ1本でシナリオ改修の退行を検知できる。
+name: smoke-test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run smoke test
+        run: python smoke_test.py

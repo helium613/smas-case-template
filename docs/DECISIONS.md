@@ -32,3 +32,4 @@
 - **D-14** 先行研究ノート(DAMD/Open Games/偽名入札耐性/環境の第一級抽象化/電子制度)を`SMAS_theorymap.md` 7章に初稿として追加。発信前の原典確認を必須とし、サーベイはタイムボックスで打ち切る。
 - **D-15** 実装をD-07に整合: `scenarios/deviation_test.py`を反実仮想比較(SelfEnforcementReport、計測のみ・配分に不干渉)に書き換え、信用ゲート(`filter_eligible_declarations`)をデモ本編から外して「2ケース目プレビュー」に格下げ。追加根拠: ゲートをVCGに重ねると今日の当選が明日の参加資格に影響し、1回性の支配戦略分析の前提が崩れる。また当選率だけでは「合理性を欠いた独占者」と「正当に評価額が高い正直者」を区別できない。2ケース目では後付けフィルタでなく②誘因構造層の一部として再設計する。`smoke_test.py`全チェック通過を確認済み(逸脱合計効用−12.0 < 正直+4.0)。
 - **D-16** CLAUDE.mdをルートに一本化(`docs/CLAUDE.md`を削除)。理由: 内容がほぼ重複した2ファイルの並行管理はドリフトの温床(実際に言語選定節・ファイル名参照が既に食い違っていた)。docs側にのみ存在した言語選定節(TypeScript/Julia不採用)はルートの5章へ移植済み。
+- **D-17** CIを導入: GitHub Actions(`.github/workflows/smoke-test.yml`)で、PR・mainへのpushごとに`smoke_test.py`を自動実行する。理由: smoke_testが①〜⑤層の疎通+3シーンデモ+耐戦略性モンテカルロの全チェックを含むため、これ1本で退行検知として機能する(`tech_selection_candidates.md`の「CI/CD: GitHub Actions」候補の実施)。
