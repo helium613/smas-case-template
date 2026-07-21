@@ -1,0 +1,14 @@
+environment:
+  half_life_rounds: 8.0
+  max_trace_age_rounds: 50
+
+aggregation:
+  max_iterations: 1
+  timeout_seconds: 5.0
+
+mechanism:
+  choices: ["yes", "no"]
+  max_delegation_depth: 10
+
+verification_kit:
+  monte_carlo_trials: 500

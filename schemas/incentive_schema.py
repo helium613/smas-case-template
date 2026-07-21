@@ -18,17 +18,21 @@ P = TypeVar("P", bound=BaseModel)
 class Declaration(BaseModel):
     """1エージェントからの申告。
 
-    declared_value(単一の数値申告、支払いベースのメカニズム向け)と
-    declared_ranking(順位申告、投票ベースのメカニズム向け)は排他的に使う。
-    ケース3(ボルダ得点、mechanism_catalog.md ファミリー2)で後者を追加した
-    (CLAUDE.md 11章、A側変更理由の明記。ケース1・2はdeclared_valueのみで
-    無変更、ケース2はA側変更ゼロだった。ケース3で初めて、真に異なる申告の
-    「形」を持つメカニズムに直面したための追加)。
+    declared_value(単一の数値申告、支払いベースのメカニズム向け)・
+    declared_ranking(順位申告、投票ベースのメカニズム向け)・delegate_to
+    (委任先、委任ベースのメカニズム向け)は排他的に使う。ケース3(ボルダ得点、
+    mechanism_catalog.md ファミリー2)でdeclared_rankingを、ケース4
+    (Liquid Democracy、ファミリー5)でdelegate_toを追加した(CLAUDE.md 11章、
+    A側変更理由の明記。ケース2はA側変更ゼロだった一方、ケース3・4は2回連続で
+    追加が必要になった。5ケース目以降も同様の追加が必要になった場合は、
+    汎用ペイロード(Declaration[T])への設計変更を再検討する、CLAUDE.md 11章の
+    「頻度が増えたら危険信号」チェックの対象として明示的に残す)。
     """
 
     agent_id: str
     declared_value: float = 0.0
     declared_ranking: list[str] | None = None
+    delegate_to: str | None = None
 
 
 class AllocationResult(BaseModel):
