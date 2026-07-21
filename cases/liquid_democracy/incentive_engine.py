@@ -63,7 +63,11 @@ class LiquidDemocracyEngine:
 
         for agent_id in by_agent:
             resolve(agent_id, ())
-        return resolved
+        # resolvedには、実在しない委任先(declare_toの誤字・離脱済みagent_id等)への
+        # 参照が中間結果として紛れ込みうる(D-31で発見)。戻り値は実際に申告した
+        # エージェントのみに絞り、重みの保存則(len(resolved)==総申告者数)が
+        # 常に成立するようにする。
+        return {agent_id: resolved[agent_id] for agent_id in by_agent}
 
     def allocate_and_pay(self, declarations: list[Declaration]) -> AllocationResult:
         resolved = self.resolve_delegations(declarations)
