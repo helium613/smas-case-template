@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from aggregation import TerminationConfig, aggregate_by_ranking, run_mechanism
 from agents.llm_mock import ProbabilisticMockAgent
+from agents.optimization_based import OptimizingBidderAgent
 from agents.rule_based import (
     FluctuatingHonestAgent,
     GreedyOverstatingAgent,
@@ -163,6 +164,30 @@ def main() -> None:
         "結託側の合計効用がより高い均衡が存在する。単独逸脱への耐戦略性とは別の脆弱性)",
         collusion.collusion_profitable,
     )
+
+    # --- 検証キット: 最適化ベースエージェント(#1・#2、D-34で初適用) -----------------
+    def uniform_low(rng: random.Random) -> float:
+        return rng.uniform(0.0, 20.0)
+
+    def uniform_high(rng: random.Random) -> float:
+        return rng.uniform(8.0, 30.0)
+
+    for label, sampler in [("一様分布[0,20]", uniform_low), ("一様分布[8,30]", uniform_high)]:
+        optimizer_agent = OptimizingBidderAgent(
+            agent_id="me",
+            true_value=10.0,
+            competitor_id="rival",
+            competitor_bid_sampler=sampler,
+            engine=engine,
+            rng=random.Random(1),
+        )
+        action = optimizer_agent.decide(ObservationInput(trace_summary={}))
+        check(
+            f"検証キット(D-34): 最適化ベースエージェントは信念分布({label})によらず、"
+            f"期待効用を最大化する申告額が真の評価額(10.0)に数値的に収束する"
+            f"(申告={action.declared_value:.2f})",
+            abs(action.declared_value - 10.0) < 0.5,
+        )
 
     # --- 3シーン構成の疎通確認(シーン3: 反実仮想比較による自己拘束の確認、D-07) ----
     scene_env: EnvironmentClient = EnvironmentClient(env_config)
