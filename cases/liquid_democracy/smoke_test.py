@@ -87,6 +87,18 @@ def main() -> None:
         deep_resolved["agent0"] is None,
     )
 
+    dangling_declarations = [
+        Declaration(agent_id="alice", delegate_to="nobody"),
+        Declaration(agent_id="bob", declared_ranking=["yes"]),
+    ]
+    dangling_resolved = engine.resolve_delegations(dangling_declarations)
+    check(
+        "②誘因構造層(D-31): 存在しない委任先(誤字・離脱済み等)は無効票になり、"
+        "resolvedには実際の申告者のみが含まれる(重みの保存則が壊れない)",
+        dangling_resolved == {"alice": None, "bob": "yes"}
+        and weight_conservation_holds(dangling_resolved, total_agents=2),
+    )
+
     # --- ③集約層: 打ち切りルール(共通実装、他ケースと同一の確認) -----------------
     outcome = run_mechanism(engine, basic_declarations, termination=termination)
     check("③集約層: 正常系ではフォールバックに落ちない", not outcome.terminated_by_fallback)
