@@ -1,0 +1,38 @@
+# ①環境層・③集約層・②誘因構造層のパラメータ(ケース2: 信用枠配分)
+# 構造(キー)はケース1と共通、値はケース依存(smas_project_spec.md 3章)
+
+environment:
+  half_life_rounds: 8.0       # ケース1(3.0)より長命(信用枠は積算的に効くため)
+  max_trace_age_rounds: 50    # 4シーン合計(最大38ラウンド程度)を覆う長さにする
+
+# ③集約層(メカニズム実行層)の打ち切りルール(CLAUDE.md 8章、必須実装)
+aggregation:
+  max_iterations: 1
+  timeout_seconds: 5.0
+
+# ②誘因構造層: トリガー戦略のパラメータ(介入ポートでの更新対象、D-22)
+#
+# パラメータ選定の根拠: deviate_rounds(誘惑の窓)に対してpunishment_rounds(制裁期間)
+# +ゆるやかなgrowth_rate(回復の遅さ)が十分に上回るよう、複数の組み合わせを比較して
+# 選定した(scratchpadでのパラメータ探索、docs/DECISIONS.md参照)。punishment_rounds=5・
+# growth_rate=4.0では、deviate_rounds=5の連続違反が反実仮想(遵守を貫いた場合)を
+# 上回ってしまう(フォーク定理の不等式が破れる)ことが判明したため、制裁を長く・
+# 回復を緩やかにした。
+mechanism:
+  base_limit: 10.0
+  max_limit: 30.0
+  growth_rate: 2.0
+  punishment_rounds: 10
+  punishment_limit: 0.5
+
+# ④シナリオ: 4シーン構成のラウンド数・割引率
+scenario:
+  build_rounds: 10
+  deviate_rounds: 3
+  punishment_rounds: 10
+  recover_rounds: 15
+  discount: 0.9
+
+# 検証キットの設定
+verification_kit:
+  monte_carlo_trials: 1000
