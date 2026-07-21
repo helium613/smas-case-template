@@ -26,3 +26,10 @@ Quint/TLAは②収束性ではなく①到達可能性(+評価観点#16並行安
 互換性バグにより`quint verify`が実行できない。`typecheck`・`quint run`(シミュレーション)
 は確認済み。`generate_results_summary.py`の`run_quint_check()`が、ケース1・2と同じ方針で
 シミュレーションによる経験的確認に留め、限界を明記する。
+
+**既知の制約(D-19とは別の新しい環境不具合、D-29)**: `quint run`の**デフォルトバックエンド**
+(初回自動ダウンロードされるRust評価器)は、このマシンでは展開後の実ファイル名
+(`quint_evaluator.exe`)と起動コードが期待する名前(`quint-evaluator.exe`)が一致せず
+`ENOENT`で失敗する。`--backend typescript`を明示指定すればRust評価器を経由せず問題ない
+(`generate_results_summary.py`の`run_quint_check()`は元からこの指定をしており影響を
+受けない)。バックエンド未指定でこのファイルを手元確認する場合のみ注意すること。
