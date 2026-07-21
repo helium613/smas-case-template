@@ -227,6 +227,14 @@ def main() -> None:
         f"(SMAS_theorymap.md 2.1節)。"
     )
     lines.append(
+        "- **本チェックの範囲(重要)**: `pymdptoolbox`はシングルエージェント用のMDPソルバーであり、"
+        "ここでの用途は「他エージェントは正直・制裁ルールは固定という前提のもとで、1エージェント"
+        "(逸脱候補)が単独逸脱して得をしないか」を検証する、繰り返しゲームの均衡検証における"
+        "標準手法「一撃逸脱原理(one-shot deviation principle)」への還元である。単独逸脱の"
+        "非収益性のみを確認するものであり、複数エージェントの結託(#5、未検証)や、他の均衡が"
+        "存在しないことまでは検証していない(docs/DECISIONS.md D-25)。"
+    )
+    lines.append(
         f"- 逸脱注入からの回復力(#20): 4シーンデモでシーン4終盤にcarolの信用枠が"
         f"punishment_limit({params.punishment_limit})を超えて回復し始めることを確認済み。"
     )
@@ -253,6 +261,12 @@ def main() -> None:
     lines.append(
         f"- 打ち切り耐性(#23): 4シーン構成の全{scenario['build_rounds'] + scenario['deviate_rounds'] + scenario['punishment_rounds'] + scenario['recover_rounds']}"
         f"ラウンドでフォールバックに落ちず完走(確認済み)。"
+    )
+    lines.append(
+        "- 結託耐性(#5): 本ケースでも未検証(ケース1と同じくscope_exclusions_and_deferrals.md "
+        "Part2の対象)。複数エージェントが同時に共謀するケースは単独逸脱を前提とする②MDPの"
+        "検証範囲外であり、`pygambit`(技術スタックに③頑健性用として記載済みだが両ケースとも"
+        "未使用)によるステージゲームの均衡計算等、別途の検証が必要(D-25)。"
     )
     lines.append("")
 
