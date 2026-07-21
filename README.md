@@ -36,7 +36,7 @@ python cases/task_allocation/smoke_test.py   # ①〜⑤の疎通を確認する
 | 主体決定層(④実行主体層) | `agents/` | 共通実装(リポジトリルート)。`rule_based.py` / `llm_mock.py` はそのまま使える。`llm_real.py` はAPIキー設定が必要 |
 | 構造検証層(⑤検証層) | `verification.py` | 共通実装(リポジトリルート)。`DisCoPy`で①→③→②パイプラインの合成則を事後チェック |
 | 逸脱注入シナリオ | `cases/<ケース名>/deviation_test.py` | ケースごとに書く。判定基準(効用差の計算方法等)はケースの性質に合わせる |
-| 検証キット(共通部分) | `verification_kit/montecarlo.py`・`mdp_convergence.py` | 共通実装(リポジトリルート) |
+| 検証キット(共通部分) | `verification_kit/montecarlo.py`・`mdp_convergence.py`・`gambit_collusion.py` | 共通実装(リポジトリルート) |
 | 検証キット(Quint) | `cases/<ケース名>/quint/` | ケースごとの状態機械を記述するため、ケース固有 |
 | パラメータ | `cases/<ケース名>/config.yaml` | 構造は`schemas/environment_schema.py`で共通、値はケースごとに調整する |
 
@@ -74,7 +74,7 @@ python cases/task_allocation/smoke_test.py   # ①〜⑤の疎通を確認する
 |---|---|---|
 | ①到達可能性 | Yes/No判定 | `verification.check_absence_of_concentrated_power` 等 |
 | ②収束性 | MDPの収束確率(1回性エンジンでは適用不可) | `verification_kit/mdp_convergence.py` |
-| ③頑健性 | モンテカルロ結果の要約 | `verification_kit/montecarlo.py` |
+| ③頑健性 | モンテカルロ結果の要約(+結託耐性は`pygambit`でナッシュ均衡を検証) | `verification_kit/montecarlo.py`・`gambit_collusion.py` |
 | ④資源コスト | 計算量・実行時間の概算 | `aggregation.AggregationOutcome.elapsed_seconds` |
 | ⑤検証可能性 | DisCoPy・Quintのチェック結果Pass/Fail | `verification.run_structural_verification`、各ケースの`quint/` |
 

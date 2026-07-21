@@ -47,6 +47,7 @@ from schemas.environment_schema import EnvironmentConfig
 from schemas.incentive_schema import Declaration
 from deviation_test import run_scene, run_three_scene_demo
 from verification import run_structural_verification
+from verification_kit.gambit_collusion import check_pure_nash_collusion
 from verification_kit.montecarlo import run_trials, summarize
 
 
@@ -197,6 +198,34 @@ def main() -> None:
     montecarlo_elapsed = time.perf_counter() - t0
     mc_summary = summarize(trials)
 
+    # --- ③: pygambitによる結託耐性の検証(#5、D-33で初めて使用) ------------------------
+    carol_true = 5.0
+
+    def collusion_payoff(bid_alice: float, bid_bob: float) -> tuple[float, float]:
+        decls = [
+            Declaration(agent_id="alice", declared_value=bid_alice),
+            Declaration(agent_id="bob", declared_value=bid_bob),
+            Declaration(agent_id="carol", declared_value=carol_true),
+        ]
+        outcome = engine.allocate_and_pay(decls)
+
+        def u(agent_id: str, true_value: float) -> float:
+            if agent_id not in outcome.allocated_agent_ids:
+                return 0.0
+            return true_value - outcome.payments.get(agent_id, 0.0)
+
+        return u("alice", true_values["alice"]), u("bob", true_values["bob"])
+
+    t0 = time.perf_counter()
+    collusion = check_pure_nash_collusion(
+        strategies_a=[10.0, 12.0],
+        strategies_b=[7.0, 0.0, 3.0],
+        payoff_fn=collusion_payoff,
+        honest_strategy_a=10.0,
+        honest_strategy_b=7.0,
+    )
+    gambit_elapsed = time.perf_counter() - t0
+
     # --- ⑤: DisCoPy構造検証 ---------------------------------------------------------
     t0 = time.perf_counter()
     verification_report = run_structural_verification(all_agent_ids=agent_ids, write_own_domain_only=True)
@@ -256,9 +285,18 @@ def main() -> None:
     )
     lines.append("- 誘因整合性(#1)・耐戦略性(#2): 上記の通り、過大申告(alice、1.3倍)は一度も得にならなかった。")
     lines.append(
-        "- 結託耐性(#5): 本ケースでは未検証(拡張フェーズ回し、scope_exclusions_and_deferrals.md Part2)。"
-        "`pygambit`(技術スタックに③頑健性用として記載済みだが両ケースとも未使用)による"
-        "ステージゲームの均衡計算等、別途の検証が必要(D-25)。"
+        f"- 結託耐性(#5、D-33で初めて検証): **満たさない**。`pygambit`(技術スタックに"
+        f"③頑健性用として記載済みだが4ケースを通じて未使用だった)で、alice/bobの2者間の"
+        f"戦略形ゲーム(離散化した申告の組み合わせ)を純戦略ナッシュ均衡で解いたところ、"
+        f"{collusion.equilibria_found}個の均衡が見つかった。honestな申告(alice=10, bob=7、"
+        f"合計効用={collusion.honest_combined_utility:.1f})も均衡の1つだが、bobが非ピボット"
+        f"(自分の申告額が勝敗を左右しない)であるために複数の申告額に無差別となり、"
+        f"結託側がより有利な均衡(alice={collusion.best_colluding_profile[0]:.0f}, "
+        f"bob={collusion.best_colluding_profile[1]:.0f}、合計効用="
+        f"{collusion.best_colluding_combined_utility:.1f})を外部のサイドペイメントで選べて"
+        f"しまう。単独逸脱への耐戦略性(上記モンテカルロ)とは別の脆弱性であり、VCGの"
+        f"既知の限界(サイドペイメントの執行はscope_exclusions_and_deferrals.md Part0"
+        f"「支払いの執行と沈め先」と同じ、外生的な仮定でスコープ外)。"
     )
     lines.append(
         f"- 打ち切り耐性(#23): 3シーン構成の全{len(scenes)}ラウンドでフォールバックに落ちず完走"
@@ -272,6 +310,7 @@ def main() -> None:
     lines.append(f"- 3シーン構成(scene1×5, scene2×5): 実測 {three_scene_elapsed:.3f} 秒")
     lines.append(f"- モンテカルロ N={n_trials}試行: 実測 {montecarlo_elapsed:.3f} 秒"
                  f"({montecarlo_elapsed / n_trials * 1000:.3f} ms/試行)")
+    lines.append(f"- pygambit結託耐性チェック(2×3戦略の純戦略ナッシュ均衡列挙): 実測 {gambit_elapsed * 1000:.2f} ms")
     lines.append(f"- ⑤DisCoPy構造検証: 実測 {verification_elapsed * 1000:.2f} ms")
     lines.append("- 資源コスト(#24)の内訳としては以上の通り。分散台帳・検証可能遅延関数等の"
                  "本番運用コストは技術選定が未決のため対象外(SMAS_theorymap.md 5章)。")
