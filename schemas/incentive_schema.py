@@ -16,10 +16,19 @@ P = TypeVar("P", bound=BaseModel)
 
 
 class Declaration(BaseModel):
-    """1エージェントからの申告。"""
+    """1エージェントからの申告。
+
+    declared_value(単一の数値申告、支払いベースのメカニズム向け)と
+    declared_ranking(順位申告、投票ベースのメカニズム向け)は排他的に使う。
+    ケース3(ボルダ得点、mechanism_catalog.md ファミリー2)で後者を追加した
+    (CLAUDE.md 11章、A側変更理由の明記。ケース1・2はdeclared_valueのみで
+    無変更、ケース2はA側変更ゼロだった。ケース3で初めて、真に異なる申告の
+    「形」を持つメカニズムに直面したための追加)。
+    """
 
     agent_id: str
-    declared_value: float
+    declared_value: float = 0.0
+    declared_ranking: list[str] | None = None
 
 
 class AllocationResult(BaseModel):
