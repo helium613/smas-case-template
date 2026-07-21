@@ -32,6 +32,7 @@ from schemas.environment_schema import EnvironmentConfig, Trace
 from schemas.incentive_schema import Declaration
 from deviation_test import run_three_scene_demo
 from verification import run_structural_verification
+from verification_kit.gambit_collusion import check_pure_nash_collusion
 from verification_kit.montecarlo import run_trials, summarize
 
 
@@ -129,6 +130,38 @@ def main() -> None:
     check(
         "検証キット: VCG(セカンドプライス)では過大申告が得にならない(耐戦略性)",
         summary["profitable_deviation_count"] == 0,
+    )
+
+    # --- 検証キット: pygambitによる結託耐性(#5、D-33で初めて使用) ------------------
+    carol_true = 5.0
+
+    def payoff(bid_alice: float, bid_bob: float) -> tuple[float, float]:
+        decls = [
+            Declaration(agent_id="alice", declared_value=bid_alice),
+            Declaration(agent_id="bob", declared_value=bid_bob),
+            Declaration(agent_id="carol", declared_value=carol_true),
+        ]
+        outcome = engine.allocate_and_pay(decls)
+
+        def u(agent_id: str, true_value: float) -> float:
+            if agent_id not in outcome.allocated_agent_ids:
+                return 0.0
+            return true_value - outcome.payments.get(agent_id, 0.0)
+
+        return u("alice", true_values["alice"]), u("bob", true_values["bob"])
+
+    collusion = check_pure_nash_collusion(
+        strategies_a=[10.0, 12.0],
+        strategies_b=[7.0, 0.0, 3.0],
+        payoff_fn=payoff,
+        honest_strategy_a=10.0,
+        honest_strategy_b=7.0,
+    )
+    check(
+        "検証キット(D-33): VCGは結託(bobが自分の申告を下げてaliceの支払いを圧縮する)に"
+        "対して耐性がない(bobは非ピボット=自分の申告が勝敗を左右しないため無差別で、"
+        "結託側の合計効用がより高い均衡が存在する。単独逸脱への耐戦略性とは別の脆弱性)",
+        collusion.collusion_profitable,
     )
 
     # --- 3シーン構成の疎通確認(シーン3: 反実仮想比較による自己拘束の確認、D-07) ----

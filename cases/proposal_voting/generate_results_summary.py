@@ -273,9 +273,11 @@ def main() -> None:
         f"({'確認済み' if all(not s.outcome.terminated_by_fallback for s in scenes) else '要確認'})。"
     )
     lines.append(
-        "- 結託耐性(#5): 本ケースでも未検証(ケース1・2と同じくscope_exclusions_and_deferrals.md "
-        "Part2の対象)。`pygambit`(技術スタックに③頑健性用として記載済みだが3ケースとも未使用)に"
-        "よるステージゲームの均衡計算等、別途の検証が必要(D-25)。"
+        "- 結託耐性(#5): 本ケース固有の結託シナリオ(例: 2エージェントが互いのランキングを"
+        "調整し合う)への検証は未実施。`pygambit`はケース1(VCG)向けに"
+        "`verification_kit/gambit_collusion.py`として実装・行使し、技術スタックに記載済み"
+        "だが未使用だったギャップを解消した(D-33)。ボルダ得点固有の結託シナリオへの適用は"
+        "まだ行っていない、引き続き別途の検証課題。"
     )
     lines.append("")
 

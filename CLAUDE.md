@@ -90,11 +90,11 @@ POMDP、最適化ベースエージェント、構成的アプローチへの格
 | 層 | ライブラリ |
 |---|---|
 | 環境層 | dict/JSON永続化(将来Redis)、Pydantic |
-| 誘因構造層 | 自作(支払い関数)、検算に`pygambit` |
+| 誘因構造層 | 自作(支払い関数)、検算に`pygambit`(結託耐性の検証、`verification_kit/gambit_collusion.py`、D-33でケース1に初適用) |
 | 集約層 | ケース1(VCG)の配分決定(winner determination)は`scipy`の割当解。`pref_voting`は投票ファミリー用。収束確率に`pymdptoolbox`(1回性エンジンには適用不可、詳細は`SMAS_theorymap.md` 2.1節) |
 | 実行主体層 | ルールベース自作→将来`pomdp-py`/`PettingZoo` |
 | 検証層 | `DisCoPy` |
-| 検証キット(独立併走) | Quint(TLAモード)、モンテカルロ |
+| 検証キット(独立併走) | Quint(TLAモード)、モンテカルロ、`pygambit`(結託耐性) |
 | フレームワーク | LangGraph(第一候補、参照プロキシパターン必須) |
 
 `pip install` 時は `--break-system-packages` を付与する。
