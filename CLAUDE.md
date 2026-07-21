@@ -13,7 +13,7 @@
 - `mechanism_catalog.md` / `aggregation_functions_catalog.md` (②③層の実装候補カタログ)
 - `agent_layer_variations.md` / `llm_mock_design_guide.md` (④層の実装方針)
 - `verification_layer_clarification.md` (⑤層の4サブコンポーネント、検証の限界)
-- `evaluation_criteria.md` (評価観点24項目)
+- `evaluation_criteria.md` (評価観点25項目)
 - `roadmap_consistency_memo.md` (大指標と評価観点の対応、運用方針)
 - `SMAS_theorymap.md` (通信モデル、束論との接合等の理論的根拠)
 - `scope_exclusions_and_deferrals.md` (何をやらないか、その理由)
@@ -185,9 +185,9 @@ class State(TypedDict):
 
 ---
 
-## 10. 評価の測り方(24項目ではなく5大指標を主役にする)
+## 10. 評価の測り方(25項目ではなく5大指標を主役にする)
 
-レポート・ログ出力は、以下の5大指標を主役にする。24項目の評価観点は「内訳・根拠」として、大指標の結果に1行併記する(省略しない)。
+レポート・ログ出力は、以下の5大指標を主役にする。25項目の評価観点は「内訳・根拠」として、大指標の結果に1行併記する(省略しない)。
 
 | 大指標 | 測定方法 |
 |---|---|
