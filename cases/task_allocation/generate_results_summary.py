@@ -1,6 +1,7 @@
 """5大指標レポート生成(CLAUDE.md 10章)。
 
-python generate_results_summary.py で実行し、results/summary.md を書き出す。
+python cases/task_allocation/generate_results_summary.py で(リポジトリルートから)
+実行し、cases/task_allocation/results/summary.md を書き出す。
 
 CLAUDE.md 10章の運用ルールに従い、①〜⑤の大指標を主役として1行ずつ結論を出し、
 25項目の評価観点は「内訳・根拠」として各指標に併記する(省略しない)。
@@ -25,21 +26,26 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 import yaml
+
+_CASE_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(_CASE_DIR.parents[1]))
 
 from aggregation import TerminationConfig, run_mechanism
 from agents.llm_mock import ProbabilisticMockAgent
 from agents.llm_real import AnthropicToolUseAgent
 from agents.rule_based import FluctuatingHonestAgent, GreedyOverstatingAgent, HonestRuleBasedAgent
-from engine.incentive_engine import SingleItemVcgEngine, SingleItemVcgParameters
 from environment import EnvironmentClient
+from incentive_engine import SingleItemVcgEngine, SingleItemVcgParameters
 from schemas.agent_schema import Agent, ObservationInput
 from schemas.environment_schema import EnvironmentConfig
 from schemas.incentive_schema import Declaration
-from scenarios.deviation_test import run_scene, run_three_scene_demo
+from deviation_test import run_scene, run_three_scene_demo
 from verification import run_structural_verification
 from verification_kit.montecarlo import run_trials, summarize
 
@@ -80,7 +86,7 @@ def check_pluggability() -> str:
         f"型の互換性のみを確認しており、振る舞いの同等性(LLMが理論通り動くか)は主張しない。"
     )
 
-QUINT_SPEC_PATH = "verification_kit/quint/task_allocation.qnt"
+QUINT_SPEC_PATH = str(_CASE_DIR / "quint" / "task_allocation.qnt")
 
 
 def run_quint_check() -> str:
@@ -126,7 +132,7 @@ def run_quint_check() -> str:
 
 
 def main() -> None:
-    with open("config.yaml", encoding="utf-8") as f:
+    with open(_CASE_DIR / "config.yaml", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     env_config = EnvironmentConfig(**config["environment"])
@@ -294,11 +300,11 @@ def main() -> None:
         "よる網羅的な形式検証ではない(環境のツールチェイン不具合による、docs/DECISIONS.md D-19)。"
     )
 
-    os.makedirs("results", exist_ok=True)
-    with open("results/summary.md", "w", encoding="utf-8") as f:
+    os.makedirs(_CASE_DIR / "results", exist_ok=True)
+    with open(_CASE_DIR / "results" / "summary.md", "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
-    print("results/summary.md を生成しました。")
+    print("cases/task_allocation/results/summary.md を生成しました。")
     print(f"①到達可能性={'Yes' if reachability_yes else 'No'} / "
           f"③頑健性: 逸脱成功={mc_summary['profitable_deviation_count']}/{mc_summary['n_trials']} / "
           f"⑤DisCoPy={disco_py_pass}")

@@ -1,13 +1,22 @@
 """①〜⑤の疎通確認スクリプト(疎通確認レベル、簡易スクラッチ実装のためpytest等は使わない)。
 
-python smoke_test.py で実行する。CLAUDE.md 9章の3シーン構成、5大指標の
-最小セットが、実際に動くことを確認する。
+python cases/task_allocation/smoke_test.py で(リポジトリルートから)実行する。
+CLAUDE.md 9章の3シーン構成、5大指標の最小セットが、実際に動くことを確認する。
+
+このファイルは cases/task_allocation/ 配下にあり、①③⑤等の共通実装(environment.py,
+aggregation.py, verification.py, schemas/, agents/, verification_kit/)はリポジトリ
+ルートに置かれている。common側をインポートできるよう、起動時にリポジトリルートを
+sys.pathへ追加する(docs/DECISIONS.md D-23、cases/ディレクトリ導入の経緯)。
 """
 from __future__ import annotations
 
 import random
+import sys
+from pathlib import Path
 
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from aggregation import TerminationConfig, aggregate_by_ranking, run_mechanism
 from agents.llm_mock import ProbabilisticMockAgent
@@ -17,11 +26,11 @@ from agents.rule_based import (
     HonestRuleBasedAgent,
     OverstatingRuleBasedAgent,
 )
-from engine.incentive_engine import SingleItemVcgEngine, SingleItemVcgParameters
 from environment import EnvironmentClient, WallViolation
+from incentive_engine import SingleItemVcgEngine, SingleItemVcgParameters
 from schemas.environment_schema import EnvironmentConfig, Trace
 from schemas.incentive_schema import Declaration
-from scenarios.deviation_test import run_three_scene_demo
+from deviation_test import run_three_scene_demo
 from verification import run_structural_verification
 from verification_kit.montecarlo import run_trials, summarize
 
@@ -33,7 +42,7 @@ def check(label: str, condition: bool) -> None:
 
 
 def main() -> None:
-    with open("config.yaml", encoding="utf-8") as f:
+    with open(Path(__file__).parent / "config.yaml", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     # --- ①環境層: 壁・減衰 -------------------------------------------------
@@ -176,7 +185,7 @@ def main() -> None:
     # --- 信用ゲート(2ケース目プレビュー、D-07/D-15): 純関数としての最小動作確認のみ ----
     # デモ本編(3シーン)からは外した。scene_env にはシーン2でcarolが当選を独占した
     # 公開痕跡が残っているため、ゲート関数が当選率の異常を機械的に検出できることだけ確認する。
-    from engine.incentive_engine import filter_eligible_declarations
+    from incentive_engine import filter_eligible_declarations
 
     gate_input = [Declaration(agent_id=a, declared_value=1.0) for a in agent_ids]
     gated = filter_eligible_declarations(scene_env, gate_input)

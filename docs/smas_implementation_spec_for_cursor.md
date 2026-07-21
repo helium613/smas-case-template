@@ -214,7 +214,28 @@ class State(TypedDict):
 
 ---
 
-## 11. リポジトリ構成
+## 11. リポジトリ構成(改訂: 単一リポジトリ+`cases/`、`docs/DECISIONS.md` D-23)
+
+以下の3リポジトリ構成案は**不採用**。1ケース目(タスク配分)の実装が、テンプレートを想定した現行リポジトリに直接書かれ、実質的に「テンプレート」と「ケース実装」が同一リポジトリで運用された。2ケース目着手にあたり、この実態を追認し、単一リポジトリ内で共通部分とケース固有部分を`cases/`ディレクトリで分離する方針に正式変更した。
+
+```
+smas-case-template/(このリポジトリ。名称は残すが実態は「共通実装+全ケース」)
+├── environment.py, aggregation.py, verification.py   ← 共通実装(①③⑤)
+├── schemas/                                           ← 共通実装(型定義)
+├── agents/                                             ← 共通実装(④)
+├── verification_kit/montecarlo.py, mdp_convergence.py ← 共通実装(検証キット)
+├── .github/workflows/smoke-test.yml                    ← cases/*/smoke_test.py を全件実行
+└── cases/
+    ├── task_allocation/    ← ケース1(incentive_engine.py・deviation_test.py・
+    │                          config.yaml・smoke_test.py・generate_results_summary.py・
+    │                          demo_llm_real.py・quint/・results/)
+    └── credit_allocation/  ← ケース2(以降、同じ構成で追加)
+```
+
+**運用ルール**: 共通部分(①③④⑤・schemas/)の修正が必要になったら、リポジトリルート(この場所)を正典として直し、`cases/*/smoke_test.py`を全て実行して後方互換性を確認する。ケース1完走時点は`git tag case1-task-allocation-complete`で参照可能。
+
+<details>
+<summary>不採用となった旧3リポジトリ構成案(参考、折りたたみ)</summary>
 
 ```
 smas-architecture/            # 仕様・ドキュメント本体
@@ -254,6 +275,8 @@ smas-case-template/            # GitHub Template Repository
 
 smas-case-<ケース名>/          # テンプレートからfork、今回はここで実装
 ```
+
+</details>
 
 ---
 
