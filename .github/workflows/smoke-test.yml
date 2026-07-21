@@ -1,6 +1,8 @@
-# PR・mainへのpushごとに疎通確認スクリプト(smoke_test.py)を自動実行する。
-# smoke_test.py は①〜⑤層の疎通+3シーンデモ+モンテカルロ(耐戦略性)の
-# 全チェックを含むため、これ1本でシナリオ改修の退行を検知できる。
+# PR・mainへのpushごとに、全ケース(cases/*/smoke_test.py)の疎通確認スクリプトを
+# 自動実行する。各smoke_test.pyは①〜⑤層の疎通+シナリオデモ+モンテカルロ(耐戦略性)
+# の全チェックを含むため、これ1本でシナリオ改修の退行を検知できる。
+# cases/配下に新しいケースを追加しても、smoke_test.pyさえ置けば自動的にCI対象になる
+# (docs/DECISIONS.md D-23、cases/ディレクトリ導入の経緯)。
 name: smoke-test
 
 on:
@@ -19,5 +21,10 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Run smoke test
-        run: python smoke_test.py
+      - name: Run smoke test for each case
+        run: |
+          set -e
+          for f in cases/*/smoke_test.py; do
+            echo "=== $f ==="
+            python "$f"
+          done

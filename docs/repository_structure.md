@@ -1,6 +1,65 @@
-# SMASプロジェクト リポジトリ構成(最終案)
+# SMASプロジェクト リポジトリ構成
 
-## 全体像: 3リポジトリ構成
+## 現行方針: 単一リポジトリ+`cases/`ディレクトリ(`docs/DECISIONS.md` D-23)
+
+1ケース目(タスク配分)は、後述の「旧3リポジトリ構成案」が想定していたテンプレートリポジトリに直接実装され、実質的にテンプレートとケース実装が同一リポジトリで運用された。2ケース目(信用枠配分)着手にあたり、この実態を追認し、**新しいGitHubリポジトリは作らず、単一リポジトリ内で共通部分とケース固有部分を`cases/`ディレクトリで分離する**方針に正式変更した。
+
+```
+smas-case-template/(このリポジトリ。名称は残すが実態は「共通実装+全ケース」)
+├── environment.py              # ①: 共通実装(そのまま使う)
+├── aggregation.py              # ③: 共通実装(VCG系はscipy割当解、投票系はpref_voting)
+├── verification.py             # ⑤: DisCoPy利用の共通実装
+├── schemas/                    # 型定義(A側、共通)
+│   ├── environment_schema.py
+│   ├── incentive_schema.py
+│   ├── agent_schema.py
+│   └── verification_schema.py
+├── agents/                     # ④: 共通実装(ルールベース/LLMモック/LLM実物)
+│   ├── rule_based.py
+│   ├── llm_mock.py
+│   └── llm_real.py
+├── verification_kit/           # 検証キット: ケース非依存部分のみ共通
+│   ├── montecarlo.py           # ③頑健性(どのIncentiveEngineにも使える)
+│   └── mdp_convergence.py      # ②収束性(状態遷移を持つケース向け、共通ユーティリティ)
+├── .github/workflows/
+│   └── smoke-test.yml          # cases/*/smoke_test.py を全件自動実行
+├── docs/                       # 仕様・設計判断ログ(DECISIONS.md含む)
+├── CLAUDE.md                   # 行動指針(唯一、ルート直下に置く)
+└── cases/
+    ├── task_allocation/        # ケース1(タスク配分・VCG、1回性)
+    │   ├── incentive_engine.py         # ②: 【ここだけケースごとに書く】
+    │   ├── deviation_test.py           # 逸脱注入シナリオ【ケースごとに書く】
+    │   ├── config.yaml                 # このケース用のパラメータ値
+    │   ├── smoke_test.py               # 疎通確認(CI対象)
+    │   ├── generate_results_summary.py # 5大指標レポート生成
+    │   ├── demo_llm_real.py            # LLM実物の目玉シーン(CI対象外)
+    │   ├── quint/                      # このケース固有のQuint(TLA)スペック
+    │   │   ├── task_allocation.qnt
+    │   │   └── README.md
+    │   └── results/
+    │       └── summary.md              # 生成された検証結果サマリー
+    └── credit_allocation/      # ケース2(信用枠配分、繰り返しゲーム)、以降同じ構成
+```
+
+### 共通/ケース固有の判断基準
+
+| 分類 | 該当ファイル | 判断基準 |
+|---|---|---|
+| 共通(リポジトリルート) | `environment.py`・`aggregation.py`・`verification.py`・`schemas/`・`agents/`・`verification_kit/montecarlo.py`・`verification_kit/mdp_convergence.py` | ケースが変わっても型・ロジックが変わらない(1ケース目完走の振り返りで、Initial commit以降無変更だったことを確認済み) |
+| ケース固有(`cases/<ケース名>/`) | `incentive_engine.py`・`deviation_test.py`・`config.yaml`・`smoke_test.py`・`generate_results_summary.py`・`demo_llm_real.py`・`quint/`・`results/` | メカニズムの中身、パラメータ値、デモの筋書きがケースごとに異なる |
+
+### 運用ルール
+
+- **共通部分の修正は、このリポジトリのルート(正典)に対して行う**。修正後、`cases/*/smoke_test.py`を全て実行し、既存ケースへの後方互換性を確認する
+- **ケースの追加は`cases/<ケース名>/`ディレクトリを新設するだけで良い**。`smoke_test.py`さえ置けばCI(`smoke-test.yml`)が自動的に対象に含める
+- **ケース完走時点は`git tag`で参照可能にする**(例: `case1-task-allocation-complete`)。ケース固有ファイルを後から変更しても、完走時点の状態は履歴からいつでも参照できる
+- 「共通部分をパッケージ化して各ケースにバージョン管理された依存として配る」ような重い仕組みは、現状のスクラッチ規模(数ケース)では過剰投資と判断し、採用しない。手動コピー運用がケース3以降で本当に辛くなったら、その時に再検討する(先回りしない、CLAUDE.mdの一貫した方針)
+
+---
+
+## 不採用となった旧3リポジトリ構成案(参考)
+
+以下は1ケース目着手前に検討していた案。実際には採用されず、上記の単一リポジトリ構成に置き換わった。
 
 ```
 1. smas-architecture        (A: 仕様・ドキュメント本体)
@@ -9,104 +68,10 @@
    例: smas-case-task-allocation, smas-case-delegation
 ```
 
----
+**smas-architecture**(仕様・ドキュメント中心): `schemas/`(型定義のみ、実行しない)とdocsを持ち、ケースが増えても変化しない規格書という位置づけだった。
 
-## 1. smas-architecture(仕様・ドキュメント中心)
+**smas-case-template**(GitHub Template Repository): `environment.py`・`aggregation.py`・`verification.py`・`agents/`が共通実装、`engine/incentive_engine.py`・`scenarios/deviation_test.py`がケースごとに書く空欄、という構成だった。
 
-```
-smas-architecture/
-├── README.md                  # プロジェクト全体の概要、①②(構想・概念)の内容
-├── docs/
-│   ├── 01_concept.md          # ①中核3性質(誘因整合性・耐戦略性・個人合理性)+前提背景
-│   ├── 02_five_layers.md      # 5層構造の説明
-│   ├── 03_guideline.md        # コア/拡張の区分ガイドライン
-│   ├── 04_evaluation.md       # 評価観点22項目
-│   └── glossary.md            # 日英用語集
-├── schemas/                    # 各層のインターフェース仕様(型定義のみ、実行しない)
-│   ├── environment_schema.py   # 痕跡・壁の型(Pydantic)
-│   ├── incentive_schema.py     # 誘因構造エンジンの入出力インターフェース
-│   ├── agent_schema.py         # 実行主体層のdecide()インターフェース
-│   └── verification_schema.py  # 検証層が扱う合成則の型
-└── LICENSE                     # CC BY 4.0等、オープンな参照実装として
-```
+**smas-case-<ケース名>**(各ケースの具体実装): テンプレートをforkし、`engine/incentive_engine.py`等を埋めた状態で運用する想定だった。
 
-**役割**: 「このパターンとは何か」を定義する規格書。実行可能なプログラム本体は持たず、型定義とドキュメントのみ。ケースが増えてもここは基本的に変化しない。
-
----
-
-## 2. smas-case-template(GitHub Template Repository)
-
-```
-smas-case-template/
-├── README.md                   # [このケースは何を検証するか]を書く欄(空欄前提)
-├── config.yaml                 # ①環境層のパラメータ(痕跡の寿命・減衰率等)
-├── environment.py              # ①環境層: 共通実装(そのまま使う)
-├── aggregation.py              # ③集約層: 共通コード(VCG系はscipy割当解、投票系はpref_voting)
-├── verification.py             # ⑤検証層: DisCoPy利用の共通コード(そのまま使う)
-├── engine/
-│   └── incentive_engine.py     # ②誘因構造エンジン: 【ここだけケースごとに書く】
-├── agents/
-│   ├── rule_based.py           # ④実行主体: ルールベース(雛形、微修正で使う)
-│   ├── llm_mock.py             # ④実行主体: LLMモック(確率分布、雛形)
-│   └── llm_real.py             # ④実行主体: LLM実物(Tool Use/JSON Schema、雛形)
-├── scenarios/
-│   └── deviation_test.py       # 逸脱注入テストのシナリオ【ケースごとに書く】
-└── verification_kit/            # 独立した検証キット(前回合意した構成)
-    ├── quint/                   # 並行性・安全性検証(TLAモード)
-    └── mdp_convergence.py       # 収束確率評価(pymdptoolbox)
-```
-
-**役割**: 「何が共通(そのまま使う)で、何がケース固有(埋める)か」を、フォルダ構造そのもので体現する土台。GitHubの"Use this template"機能でfork前提。
-
----
-
-## 3. smas-case-task-allocation(1ケース目、テンプレートからfork)
-
-```
-smas-case-task-allocation/
-├── README.md                   # 「これはタスク配分ケースの検証です」+結果サマリー
-├── config.yaml                 # このケース用のパラメータ値
-├── engine/
-│   └── incentive_engine.py     # VCG支払い関数を実装(埋めた状態)
-├── agents/
-│   └── (テンプレートからほぼそのまま、必要な差分のみ調整)
-├── scenarios/
-│   └── deviation_test.py       # 過大申告のシナリオ等、埋めた状態
-├── verification_kit/
-│   └── (実行済みの検証結果: 収束率97%等の出力ログを含む)
-└── results/
-    └── summary.md               # 「N=1000試行で収束率○%」等の最終サマリー
-```
-
----
-
-## 4. (将来・任意)smas-presentation(可視化ビューア、ケース非依存)
-
-```
-smas-presentation/
-├── README.md                   # 「SMASのログ形式に沿ったデータを可視化するビューア」
-├── src/                         # TS/React、DisCoPy由来のワイヤリングダイアグラム表示等
-└── log_format_spec.md           # smas-architectureのschemasと対応する、ログ出力フォーマット仕様
-```
-
-**役割**: ①環境層のログ出力フォーマットが標準化された段階(2ケース目着手時が目安)で切り出す。1ケース目では`smas-case-task-allocation`内に直接書いて構わない。
-
----
-
-## 依存関係の全体図
-
-```
-smas-architecture (仕様: schemas/を参照)
-        ↑ 準拠
-smas-case-template (仕様に準拠した雛形)
-        ↑ fork
-smas-case-task-allocation, smas-case-delegation, ... (個別ケース)
-        ↓ ログ出力(共通フォーマット)
-smas-presentation (任意・将来: 汎用ビューア)
-```
-
-## 運用ルールの要点
-
-- **smas-architectureへの変更は稀**(①②③概念層・骨格層はほぼ普遍という前提のため)
-- **smas-case-templateへの変更は、複数ケースをこなす中で「これも共通化できる」と気づいた時のみ**(前回合意した"2ケース目で骨格を検証する"というプロセスの受け皿)
-- **各smas-case-*は独立して育ち、他のケースに影響を与えない**
+**不採用の理由**: 1ケース目の実装が、想定されていた「テンプレート」リポジトリに直接書かれ、この3層構造が実態と乖離した。振り返ると、単一リポジトリ+`git log`によるほうが「共通部分がどれだけ変更されずに済んだか」を直接的に検証でき(2つのリポジトリを手動でdiffするより確実)、手動バックポート時の同期ズレリスクも発生しない。詳細は`docs/DECISIONS.md` D-23。
