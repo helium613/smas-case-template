@@ -1,0 +1,11 @@
+# SMASケース共通の依存ライブラリ(CLAUDE.md 5章の技術スタックに対応)
+# pip install -r requirements.txt
+
+pydantic>=2.0        # ①環境層・②誘因構造層・④実行主体層のA側型定義
+pref_voting>=1.18     # ③集約層(投票・社会選択メカニズムの集約関数)
+discopy>=1.2          # ⑤検証層(モノイダル圏・合成則の事後チェック)
+pymdptoolbox>=4.0b3   # 検証キット(繰り返しケースの収束確率評価)
+pyyaml>=6.0           # config.yaml の読み込み
+
+# 任意(④実行主体層の「LLM実物」を使う場合のみ。目玉シーン数回の呼び出し用)
+# anthropic>=0.40
