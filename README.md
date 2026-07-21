@@ -33,7 +33,7 @@ python cases/task_allocation/smoke_test.py   # ①〜⑤の疎通を確認する
 | ストレージ層(①環境層) | `environment.py` | 共通実装(リポジトリルート)。**そのまま使う** |
 | メカニズム定義層(②誘因構造層) | `cases/<ケース名>/incentive_engine.py` | **ここだけケースごとに書く**。都度の数学的導出が必要な、唯一の層 |
 | メカニズム実行層(③集約層) | `aggregation.py` | 共通実装(リポジトリルート)。打ち切りルール(最大試行回数・タイムアウト・フォールバック)実装済み、`pref_voting`利用の投票集約ヘルパーも同梱 |
-| 主体決定層(④実行主体層) | `agents/` | 共通実装(リポジトリルート)。`rule_based.py` / `llm_mock.py` はそのまま使える。`llm_real.py` はAPIキー設定が必要 |
+| 主体決定層(④実行主体層) | `agents/` | 共通実装(リポジトリルート)。`rule_based.py` / `llm_mock.py` / `optimization_based.py` はそのまま使える。`llm_real.py` はAPIキー設定が必要 |
 | 構造検証層(⑤検証層) | `verification.py` | 共通実装(リポジトリルート)。`DisCoPy`で①→③→②パイプラインの合成則を事後チェック |
 | 逸脱注入シナリオ | `cases/<ケース名>/deviation_test.py` | ケースごとに書く。判定基準(効用差の計算方法等)はケースの性質に合わせる |
 | 検証キット(共通部分) | `verification_kit/montecarlo.py`・`mdp_convergence.py`・`gambit_collusion.py` | 共通実装(リポジトリルート) |

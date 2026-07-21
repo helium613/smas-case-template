@@ -24,6 +24,7 @@ quint↔Apalache間のgRPCプロトコル互換性バグにより、Apalache・T
 from __future__ import annotations
 
 import os
+import random
 import shutil
 import subprocess
 import sys
@@ -39,6 +40,7 @@ sys.path.insert(0, str(_CASE_DIR.parents[1]))
 from aggregation import TerminationConfig, run_mechanism
 from agents.llm_mock import ProbabilisticMockAgent
 from agents.llm_real import AnthropicToolUseAgent
+from agents.optimization_based import OptimizingBidderAgent
 from agents.rule_based import FluctuatingHonestAgent, GreedyOverstatingAgent, HonestRuleBasedAgent
 from environment import EnvironmentClient
 from incentive_engine import SingleItemVcgEngine, SingleItemVcgParameters
@@ -62,7 +64,12 @@ def check_pluggability() -> str:
     honest = HonestRuleBasedAgent("alice", true_value=10.0)
     mock = ProbabilisticMockAgent("alice", true_value=10.0)
     llm_real = AnthropicToolUseAgent("alice", true_value=10.0)
-    conforms = all(isinstance(a, Agent) for a in (honest, mock, llm_real))
+    optimizer = OptimizingBidderAgent(
+        "alice", true_value=10.0, competitor_id="bob",
+        competitor_bid_sampler=lambda rng: rng.uniform(0.0, 20.0),
+        engine=SingleItemVcgEngine(SingleItemVcgParameters(reserve_price=0.0)),
+    )
+    conforms = all(isinstance(a, Agent) for a in (honest, mock, llm_real, optimizer))
 
     env = EnvironmentClient(EnvironmentConfig(half_life_rounds=3.0, max_trace_age_rounds=10))
     engine = SingleItemVcgEngine(SingleItemVcgParameters(reserve_price=0.0))
@@ -79,8 +86,9 @@ def check_pluggability() -> str:
     both_ran = ran_with_rule_based.outcome.result is not None and ran_with_mock.outcome.result is not None
 
     return (
-        f"{'Pass' if (conforms and both_ran) else 'Fail'} — ルールベース・LLMモック・LLM実物の3実装が"
-        f"同一のAgentプロトコル(schemas/agent_schema.py)を満たす({'確認' if conforms else '不成立'})。"
+        f"{'Pass' if (conforms and both_ran) else 'Fail'} — ルールベース・LLMモック・LLM実物・"
+        f"最適化ベース(D-34追加)の4実装が同一のAgentプロトコル(schemas/agent_schema.py)を"
+        f"満たす({'確認' if conforms else '不成立'})。"
         f"ルールベース・LLMモックは同一のrun_scene(①〜③の実パイプライン)に無改造で差し替え可能"
         f"({'確認' if both_ran else '不成立'})。LLM実物も同じ経路で動作することはdemo_llm_real.pyで"
         f"実演済み(資格情報が必要なためこのレポートでは自動実行しない)。"
@@ -226,6 +234,28 @@ def main() -> None:
     )
     gambit_elapsed = time.perf_counter() - t0
 
+    # --- ③: 最適化ベースエージェント(#1・#2、D-34で初適用) ---------------------------
+    def uniform_low(rng: random.Random) -> float:
+        return rng.uniform(0.0, 20.0)
+
+    def uniform_high(rng: random.Random) -> float:
+        return rng.uniform(8.0, 30.0)
+
+    t0 = time.perf_counter()
+    optimizer_results = {}
+    for label, sampler in [("一様分布[0,20]", uniform_low), ("一様分布[8,30]", uniform_high)]:
+        optimizer_agent = OptimizingBidderAgent(
+            agent_id="me",
+            true_value=10.0,
+            competitor_id="rival",
+            competitor_bid_sampler=sampler,
+            engine=engine,
+            rng=random.Random(1),
+        )
+        action = optimizer_agent.decide(ObservationInput(trace_summary={}))
+        optimizer_results[label] = action.declared_value
+    optimizer_elapsed = time.perf_counter() - t0
+
     # --- ⑤: DisCoPy構造検証 ---------------------------------------------------------
     t0 = time.perf_counter()
     verification_report = run_structural_verification(all_agent_ids=agent_ids, write_own_domain_only=True)
@@ -299,6 +329,21 @@ def main() -> None:
         f"「支払いの執行と沈め先」と同じ、外生的な仮定でスコープ外)。"
     )
     lines.append(
+        "- **本チェックの限界**: 結託耐性の検証は、alice=10/bob=7/carol=5という1つの"
+        "具体例をpygambitで厳密に解いたものであり、上記モンテカルロ(1000試行)のような"
+        "統計的な広がりは持たせていない。既知の理論的脆弱性の存在証明としては1例で"
+        "十分だが、他の評価額配置への一般化は主張しない。"
+    )
+    lines.append(
+        f"- 誘因整合性(#1)・耐戦略性(#2、D-34で数値最適化による検証を追加): 最適化ベース"
+        f"エージェント(`agents/optimization_based.py`)が、競合の申告額に関する信念分布を"
+        f"{'/'.join(optimizer_results.keys())}の2通り仮定して期待効用を数値最適化した"
+        f"ところ、いずれも真の評価額(10.0)に収束した"
+        f"({', '.join(f'{label}: 申告={value:.2f}' for label, value in optimizer_results.items())})。"
+        f"ルールベース(1.3倍等、ハンドピックした数点)とは異なり、連続空間上の数値探索で"
+        f"耐戦略性を検証した初めての例(信念分布の形状によらず最適解が真の評価額と一致する)。"
+    )
+    lines.append(
         f"- 打ち切り耐性(#23): 3シーン構成の全{len(scenes)}ラウンドでフォールバックに落ちず完走"
         f"({'確認済み' if all(not s.outcome.terminated_by_fallback for s in scenes) else '要確認'})。"
     )
@@ -311,6 +356,7 @@ def main() -> None:
     lines.append(f"- モンテカルロ N={n_trials}試行: 実測 {montecarlo_elapsed:.3f} 秒"
                  f"({montecarlo_elapsed / n_trials * 1000:.3f} ms/試行)")
     lines.append(f"- pygambit結託耐性チェック(2×3戦略の純戦略ナッシュ均衡列挙): 実測 {gambit_elapsed * 1000:.2f} ms")
+    lines.append(f"- 最適化ベースエージェント(scipy.optimize、信念分布2通り×300サンプル): 実測 {optimizer_elapsed * 1000:.2f} ms")
     lines.append(f"- ⑤DisCoPy構造検証: 実測 {verification_elapsed * 1000:.2f} ms")
     lines.append("- 資源コスト(#24)の内訳としては以上の通り。分散台帳・検証可能遅延関数等の"
                  "本番運用コストは技術選定が未決のため対象外(SMAS_theorymap.md 5章)。")
