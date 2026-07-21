@@ -1,0 +1,17 @@
+environment:
+  half_life_rounds: 8.0
+  max_trace_age_rounds: 50
+
+aggregation:
+  max_iterations: 1
+  timeout_seconds: 5.0
+
+mechanism:
+  candidate_ids: ["proposal_a", "proposal_b", "proposal_c", "proposal_d"]
+
+scenario:
+  scene1_rounds: 5
+  scene2_rounds: 5
+
+verification_kit:
+  monte_carlo_trials: 1000

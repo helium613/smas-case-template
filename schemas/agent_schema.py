@@ -26,10 +26,15 @@ class ObservationInput(BaseModel):
 class ActionOutput(BaseModel):
     """JSON Schemaで構造化された行動。自然言語のみのやり取りに依存する実装は禁止
     (CLAUDE.md 6章)。reasoning は人間可読用で、システムロジックはこれに依存しない。
+
+    declared_value・declared_ranking は schemas/incentive_schema.py の
+    Declaration と同じ理由(ケース3で順位申告メカニズムに対応、CLAUDE.md 11章)
+    で並行して追加した排他的フィールド。
     """
 
     action: str
-    declared_value: float
+    declared_value: float = 0.0
+    declared_ranking: Optional[list[str]] = None
     reasoning: Optional[str] = None
 
 
