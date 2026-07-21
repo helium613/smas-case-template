@@ -86,7 +86,8 @@ def check_pluggability() -> str:
         f"型の互換性のみを確認しており、振る舞いの同等性(LLMが理論通り動くか)は主張しない。"
     )
 
-QUINT_SPEC_PATH = str(_CASE_DIR / "quint" / "task_allocation.qnt")
+QUINT_SPEC_PATH = str(_CASE_DIR / "quint" / "task_allocation.qnt")  # subprocess呼び出し用(絶対パス、CWD非依存)
+QUINT_SPEC_DISPLAY_PATH = str(Path(QUINT_SPEC_PATH).relative_to(_CASE_DIR.parents[1]))  # レポート表示用
 
 
 def run_quint_check() -> str:
@@ -127,7 +128,7 @@ def run_quint_check() -> str:
         f"Apalache(SMT、安全性)・TLC(公平性を伴う活性: 「ラウンドは必ず終端に達する」)"
         f"による網羅的検証は、quint↔Apalache間のgRPCプロトコル互換性バグによりこの環境では"
         f"未実施(docs/DECISIONS.md D-19)。`.qnt`はtypecheck済みで、環境を修復すれば"
-        f"`{QUINT_SPEC_PATH}`の再実行のみで足りる。"
+        f"`{QUINT_SPEC_DISPLAY_PATH}`の再実行のみで足りる。"
     )
 
 
