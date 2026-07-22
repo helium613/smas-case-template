@@ -27,6 +27,7 @@ from schemas.incentive_schema import Declaration
 from voting_agents import BuryingStrategicAgent, HonestVotingAgent
 from deviation_test import run_two_scene_demo
 from verification import run_structural_verification
+from verification_kit.gambit_collusion import check_pure_nash_collusion
 
 
 def check(label: str, condition: bool) -> None:
@@ -90,6 +91,43 @@ def main() -> None:
     check(
         "②誘因構造層: ボルダ得点は非耐戦略性(埋葬戦術でbobの真の1位=proposal_bが勝つ)",
         manipulated_result.allocated_agent_ids == [proposal_b],
+    )
+
+    # --- 検証キット: pygambitによる結託耐性(#5、D-39で初めてケース3に適用) -------------
+    # D-29(3候補では単独操作者は最善でも同点にしかならない)を踏まえ、「2人の結託なら
+    # 3候補でもクリーンな逆転を起こせるか」を検証する(単独操作にできないことを結託が
+    # 可能にする、という具体的な問い)。
+    collusion_candidates = ["A", "B", "C"]
+    collusion_engine = BordaVotingEngine(BordaVotingParameters(candidate_ids=collusion_candidates))
+    a_sincere_ranking = ["A", "B", "C"]
+    bob_sincere_ranking = ["B", "A", "C"]
+    bob_bury_ranking = ["B", "C", "A"]
+    bob_true_values = {"A": 6.0, "B": 10.0, "C": 1.0}
+    dave_true_values = {"A": 6.0, "B": 10.0, "C": 1.0}
+
+    def collusion_payoff(bob_r: tuple[str, ...], dave_r: tuple[str, ...]) -> tuple[float, float]:
+        decls = [
+            Declaration(agent_id="alice", declared_ranking=a_sincere_ranking),
+            Declaration(agent_id="carol", declared_ranking=a_sincere_ranking),
+            Declaration(agent_id="erin", declared_ranking=a_sincere_ranking),
+            Declaration(agent_id="bob", declared_ranking=list(bob_r)),
+            Declaration(agent_id="dave", declared_ranking=list(dave_r)),
+        ]
+        winner = collusion_engine.allocate_and_pay(decls).allocated_agent_ids[0]
+        return bob_true_values[winner], dave_true_values[winner]
+
+    collusion = check_pure_nash_collusion(
+        strategies_a=[tuple(bob_sincere_ranking), tuple(bob_bury_ranking)],
+        strategies_b=[tuple(bob_sincere_ranking), tuple(bob_bury_ranking)],
+        payoff_fn=collusion_payoff,
+        honest_strategy_a=tuple(bob_sincere_ranking),
+        honest_strategy_b=tuple(bob_sincere_ranking),
+    )
+    check(
+        "検証キット(D-39): 3候補では単独の埋葬戦術は同点にしかならない(D-29)が、"
+        "bob+daveが結託して2人とも埋葬すると、honestより高い合計効用の均衡が新たに生まれる"
+        "(単独操作にはできないことを結託が可能にする)",
+        collusion.collusion_profitable,
     )
 
     # --- ③集約層: 打ち切りルール(共通実装、他ケースと同一の確認) -----------------

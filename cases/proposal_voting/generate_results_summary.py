@@ -34,6 +34,7 @@ from schemas.agent_schema import Agent, ObservationInput
 from schemas.environment_schema import EnvironmentConfig
 from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
+from verification_kit.gambit_collusion import check_pure_nash_collusion
 
 from deviation_test import run_two_scene_demo
 from incentive_engine import BordaVotingEngine, BordaVotingParameters
@@ -201,6 +202,38 @@ def main() -> None:
     mc_summary = run_manipulation_monte_carlo(engine, candidate_ids, n_mc_trials, rng)
     montecarlo_elapsed = time.perf_counter() - t0
 
+    # --- ③: pygambitによる結託耐性の検証(#5、D-39で初めてケース3に適用) --------------
+    # D-29(3候補では単独操作者は最善でも同点にしかならない)を踏まえ、「2人の結託なら
+    # 3候補でもクリーンな逆転を起こせるか」を検証する。
+    collusion_candidates = ["A", "B", "C"]
+    collusion_engine = BordaVotingEngine(BordaVotingParameters(candidate_ids=collusion_candidates))
+    a_sincere_ranking = ["A", "B", "C"]
+    bob_sincere_ranking = ["B", "A", "C"]
+    bob_bury_ranking = ["B", "C", "A"]
+    bob_true_values = {"A": 6.0, "B": 10.0, "C": 1.0}
+    dave_true_values = {"A": 6.0, "B": 10.0, "C": 1.0}
+
+    def collusion_payoff(bob_r: tuple[str, ...], dave_r: tuple[str, ...]) -> tuple[float, float]:
+        decls = [
+            Declaration(agent_id="alice", declared_ranking=a_sincere_ranking),
+            Declaration(agent_id="carol", declared_ranking=a_sincere_ranking),
+            Declaration(agent_id="erin", declared_ranking=a_sincere_ranking),
+            Declaration(agent_id="bob", declared_ranking=list(bob_r)),
+            Declaration(agent_id="dave", declared_ranking=list(dave_r)),
+        ]
+        winner = collusion_engine.allocate_and_pay(decls).allocated_agent_ids[0]
+        return bob_true_values[winner], dave_true_values[winner]
+
+    t0 = time.perf_counter()
+    collusion = check_pure_nash_collusion(
+        strategies_a=[tuple(bob_sincere_ranking), tuple(bob_bury_ranking)],
+        strategies_b=[tuple(bob_sincere_ranking), tuple(bob_bury_ranking)],
+        payoff_fn=collusion_payoff,
+        honest_strategy_a=tuple(bob_sincere_ranking),
+        honest_strategy_b=tuple(bob_sincere_ranking),
+    )
+    gambit_elapsed = time.perf_counter() - t0
+
     # --- ④: 単発のボルダ集計コスト(参考値) -------------------------------------------
     t0 = time.perf_counter()
     engine.allocate_and_pay(
@@ -273,11 +306,16 @@ def main() -> None:
         f"({'確認済み' if all(not s.outcome.terminated_by_fallback for s in scenes) else '要確認'})。"
     )
     lines.append(
-        "- 結託耐性(#5): 本ケース固有の結託シナリオ(例: 2エージェントが互いのランキングを"
-        "調整し合う)への検証は未実施。`pygambit`はケース1(VCG)向けに"
-        "`verification_kit/gambit_collusion.py`として実装・行使し、技術スタックに記載済み"
-        "だが未使用だったギャップを解消した(D-33)。ボルダ得点固有の結託シナリオへの適用は"
-        "まだ行っていない、引き続き別途の検証課題。"
+        f"- **結託耐性(#5、D-39で初めて検証)**: **満たさない**。D-29(3候補では単独の埋葬戦術は"
+        f"最善でも同点にしかならない)を踏まえ、「2人の結託なら3候補でもクリーンな逆転を"
+        f"起こせるか」を`pygambit`で検証した。alice/carol/erinが候補Aを一貫して支持、"
+        f"bob/daveが候補Bを真に選好する構成で、bob単独の埋葬は同点止まり(honest=Aが有効な"
+        f"タイブレークで勝つ)だが、bob+daveが結託して2人とも埋葬すると、honest(合計効用"
+        f"{collusion.honest_combined_utility:.1f})を上回る新しい均衡(合計効用"
+        f"{collusion.best_colluding_combined_utility:.1f}、候補Bが明確に勝つ)が生まれる"
+        f"ことを確認した。この均衡はサイドペイメント無しでも双方にとって厳密に有利な"
+        f"(indifferenceではない)強い均衡であり、VCGの結託(D-33、非ピボットな無差別による"
+        f"弱い均衡)よりも顕著な結託インセンティブを持つ。"
     )
     lines.append("")
 
@@ -285,6 +323,7 @@ def main() -> None:
     lines.append(f"- ボルダ集計(単発呼び出し、申告3件×候補{len(candidate_ids)}件): 実測 {single_call_elapsed * 1000:.2f} ms")
     lines.append(f"- 2シーン構成(scene1×{scenario['scene1_rounds']}, scene2×{scenario['scene2_rounds']}): 実測 {two_scene_elapsed:.3f} 秒")
     lines.append(f"- モンテカルロ N={mc_summary['n_trials']}試行: 実測 {montecarlo_elapsed:.3f} 秒")
+    lines.append(f"- pygambit結託耐性チェック(2×2戦略の純戦略ナッシュ均衡列挙): 実測 {gambit_elapsed * 1000:.2f} ms")
     lines.append(f"- ⑤DisCoPy構造検証: 実測 {verification_elapsed * 1000:.2f} ms")
     lines.append("- 資源コスト(#24): 分散台帳・検証可能遅延関数等の本番運用コストは技術選定が未決のため対象外。")
     lines.append("")
