@@ -31,8 +31,8 @@ from schemas.environment_schema import EnvironmentConfig
 from schemas.incentive_schema import VersionedMechanism
 from verification import run_structural_verification
 
-from credit_agents import CreditAwareHonestAgent
-from deviation_test import run_four_scene_demo
+from credit_agents import CreditAwareHonestAgent, CreditLimitMaximizingAgent
+from deviation_test import run_four_scene_demo, run_sustained_strategy_comparison
 from incentive_engine import TriggerStrategyEngine, TriggerStrategyParameters
 from mdp_model import check_honesty_converges
 
@@ -132,6 +132,41 @@ def run_repeated_game_monte_carlo(
     return {"n_trials": n_trials, "profitable_count": profitable_count, "profitable_rate": profitable_count / n_trials}
 
 
+def run_credit_limit_maximizing_monte_carlo(
+    engine_params: TriggerStrategyParameters,
+    env_config: EnvironmentConfig,
+    n_rounds: int,
+    n_trials: int,
+    rng: random.Random,
+) -> dict:
+    """③頑健性: D-37で敵対的LLMが発見した戦略(信用枠のすぐ下を狙って恒常的に
+    過大申告する。CreditLimitMaximizingAgentとして再現、D-38)の頑健性チェック。
+
+    上記run_repeated_game_monte_carlo(GreedyOverstatingAgent、即座に検出される
+    素朴な逸脱)とは異なる戦略を検証する——この戦略は「遵守」を一度も破らないため、
+    4シーン構成(build→deviate→punish→recover)ではなく、全ラウンドを同一戦略で
+    押し通した場合の比較(run_sustained_strategy_comparison)を使う。
+    """
+    profitable_count = 0
+    agent_ids = ["alice", "bob", "carol"]
+    engine = TriggerStrategyEngine(engine_params)
+
+    def make_env() -> EnvironmentClient:
+        return EnvironmentClient(env_config)
+
+    for _ in range(n_trials):
+        high_value = rng.uniform(12.0, 20.0)
+        low_value = rng.uniform(4.0, 10.0)
+        comparison = run_sustained_strategy_comparison(
+            agent_ids, "carol", lambda agent_id: CreditLimitMaximizingAgent(agent_id),
+            engine, make_env, n_rounds=n_rounds, discount=0.9,
+            high_value=high_value, low_value=low_value,
+        )
+        if comparison.strategy_profitable:
+            profitable_count += 1
+    return {"n_trials": n_trials, "profitable_count": profitable_count, "profitable_rate": profitable_count / n_trials}
+
+
 def main() -> None:
     with open(_CASE_DIR / "config.yaml", encoding="utf-8") as f:
         config = yaml.safe_load(f)
@@ -189,6 +224,15 @@ def main() -> None:
     mc_summary = run_repeated_game_monte_carlo(params, env_config, scenario, n_mc_trials, rng)
     montecarlo_elapsed = time.perf_counter() - t0
 
+    # --- ③: モンテカルロ(D-37の発見、信用枠内に留まる恒常的な過大申告) ----------------
+    rng_credit_limit = random.Random(0)
+    n_credit_limit_trials = min(config["verification_kit"]["monte_carlo_trials"], 50)
+    t0 = time.perf_counter()
+    credit_limit_mc_summary = run_credit_limit_maximizing_monte_carlo(
+        params, env_config, n_rounds=30, n_trials=n_credit_limit_trials, rng=rng_credit_limit
+    )
+    credit_limit_montecarlo_elapsed = time.perf_counter() - t0
+
     generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     lines: list[str] = []
     lines.append("# 2ケース目(信用枠配分・トリガー戦略) 検証結果サマリー")
@@ -242,15 +286,37 @@ def main() -> None:
     lines.append("")
 
     lines.append(
-        f"### ③頑健性: モンテカルロ N={mc_summary['n_trials']}試行(4シーンデモ全体、"
-        f"真の評価額をランダム化)、逸脱が反実仮想を上回った試行数="
-        f"{mc_summary['profitable_count']}({mc_summary['profitable_rate']:.1%})"
+        f"### ③頑健性: **総合結論は「満たさない」**(D-37/D-38)。素朴な逸脱"
+        f"(`GreedyOverstatingAgent`)には頑健(N={mc_summary['n_trials']}試行中"
+        f"{mc_summary['profitable_count']}件、{mc_summary['profitable_rate']:.1%})だが、"
+        f"信用枠内に留まる巧妙な過大申告には頑健でない(N={credit_limit_mc_summary['n_trials']}"
+        f"試行中{credit_limit_mc_summary['profitable_count']}件、"
+        f"{credit_limit_mc_summary['profitable_rate']:.1%})"
     )
     lines.append(
-        f"- 誘因整合性(#1)・耐戦略性(#2): 標準シナリオ(carol、carolの割引後合計効用: "
-        f"逸脱={comparison.actual_utility:+.2f} / 遵守を貫いた場合(反実仮想)="
-        f"{comparison.counterfactual_utility:+.2f})に加え、真の評価額の分布を変えた"
-        f"{mc_summary['n_trials']}試行でも頑健性を確認。"
+        f"- **誘因整合性(#1)・耐戦略性(#2、総合結論、D-37/D-38)**: **満たさない**。"
+        f"「遵守」(信用枠以内)と「正直」(真の評価額どおり)は本メカニズムでは同値でない。"
+        f"敵対的LLM(D-37)が実際に発見した「信用枠のすぐ下を狙って恒常的に過大申告する」"
+        f"戦略(`CreditLimitMaximizingAgent`として再現、D-38)は、`TriggerStrategyEngine`が"
+        f"信用枠以内かどうかしかチェックしないため一切検出されない。信用枠は真の評価額と"
+        f"無関係に過去の遵守実績のみから育つため、この限界は原理的なもの(観測できない"
+        f"真の評価額を、観測可能な信用枠だけで縛ることはできない)であり、メカニズムの"
+        f"実装不備ではない——VCGの結託耐性の欠如(pygambit、D-33)と同種の、メカニズム"
+        f"ファミリーに内在する既知の限界として記録する。"
+    )
+    lines.append(
+        f"- 素朴な逸脱への頑健性(参考、従来のモンテカルロ): 標準シナリオ(carol、"
+        f"carolの割引後合計効用: 逸脱={comparison.actual_utility:+.2f} / "
+        f"遵守を貫いた場合(反実仮想)={comparison.counterfactual_utility:+.2f})に加え、"
+        f"真の評価額の分布を変えた{mc_summary['n_trials']}試行でも、`GreedyOverstatingAgent`"
+        f"(固定高値、信用枠を即座に超えて検出される)には頑健であることを確認。ただし"
+        f"上記の通り、これは巧妙な逸脱(信用枠内の過大申告)までは検証できていなかった。"
+    )
+    lines.append(
+        f"- 信用枠内の恒常的過大申告への頑健性(D-37/D-38、上記総合結論の内訳): N="
+        f"{credit_limit_mc_summary['n_trials']}試行(30ラウンド、真の評価額をランダム化)で"
+        f"モンテカルロ検証したところ、{credit_limit_mc_summary['profitable_count']}件"
+        f"({credit_limit_mc_summary['profitable_rate']:.1%})でこの戦略がhonestを上回った。"
     )
     lines.append(
         "- 単一ラウンドの申告ルールだけを見ると耐戦略性を満たさない(支払いが無く、"
@@ -277,6 +343,8 @@ def main() -> None:
                  f"実測 {four_scene_elapsed:.3f} 秒")
     lines.append(f"- モンテカルロ N={mc_summary['n_trials']}試行(4シーンデモ全体×{mc_summary['n_trials']}): "
                  f"実測 {montecarlo_elapsed:.3f} 秒")
+    lines.append(f"- モンテカルロ(D-37の発見、信用枠内の恒常的過大申告) N={credit_limit_mc_summary['n_trials']}試行"
+                 f"(30ラウンド×{credit_limit_mc_summary['n_trials']}): 実測 {credit_limit_montecarlo_elapsed:.3f} 秒")
     lines.append(f"- MDP(value iteration、状態数{params.punishment_rounds + 1}): 実測 {mdp_elapsed * 1000:.2f} ms")
     lines.append(f"- ⑤DisCoPy構造検証: 実測 {verification_elapsed * 1000:.2f} ms")
     lines.append("- 資源コスト(#25、旧#24): 分散台帳・検証可能遅延関数等の本番運用コストは技術選定が未決のため対象外。")
@@ -331,6 +399,7 @@ def main() -> None:
     print(f"①到達可能性={'Yes' if reachability_yes else 'No'} / "
           f"②MDP最適方策={mdp_result['optimal_action_at_normal_state']} / "
           f"③頑健性: 逸脱成功={mc_summary['profitable_count']}/{mc_summary['n_trials']} / "
+          f"③信用枠内過大申告成功={credit_limit_mc_summary['profitable_count']}/{credit_limit_mc_summary['n_trials']} / "
           f"⑤DisCoPy={disco_py_pass}")
 
 

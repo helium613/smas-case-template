@@ -21,8 +21,8 @@ from schemas.environment_schema import EnvironmentConfig, Trace
 from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
 
-from credit_agents import CreditAwareHonestAgent
-from deviation_test import run_four_scene_demo
+from credit_agents import CreditAwareHonestAgent, CreditLimitMaximizingAgent
+from deviation_test import run_four_scene_demo, run_sustained_strategy_comparison
 from incentive_engine import TriggerStrategyEngine, TriggerStrategyParameters, compute_credit_limit
 from payloads import CreditRoundRecord
 
@@ -183,6 +183,21 @@ def main() -> None:
     print(
         f"       (carol 割引後合計効用: 逸脱={comparison.actual_utility:+.2f} / "
         f"遵守を貫いた場合(反実仮想)={comparison.counterfactual_utility:+.2f})"
+    )
+
+    # --- D-37/D-38: 信用枠内に留まる恒常的な過大申告(素朴な逸脱とは異なる、検出されない戦略) ---
+    sustained_comparison = run_sustained_strategy_comparison(
+        agent_ids, "carol", lambda agent_id: CreditLimitMaximizingAgent(agent_id),
+        demo_engine, lambda: EnvironmentClient(env_config), n_rounds=30, discount=0.9,
+    )
+    check(
+        "D-37/D-38: 信用枠のすぐ下を狙う恒常的な過大申告は、GreedyOverstatingAgentとは異なり"
+        "一切検出されず、honestを上回る(メカニズムファミリーに内在する既知の限界)",
+        sustained_comparison.strategy_profitable,
+    )
+    print(
+        f"       (carol 割引後合計効用: 信用枠内過大申告={sustained_comparison.strategy_utility:+.2f} / "
+        f"honest={sustained_comparison.honest_utility:+.2f})"
     )
 
     print("\nすべての疎通確認に成功しました。")
