@@ -35,6 +35,7 @@ python cases/task_allocation/smoke_test.py   # ①〜⑤の疎通を確認する
 | メカニズム実行層(③集約層) | `aggregation.py` | 共通実装(リポジトリルート)。打ち切りルール(最大試行回数・タイムアウト・フォールバック)実装済み、`pref_voting`利用の投票集約ヘルパーも同梱 |
 | 主体決定層(④実行主体層) | `agents/` | 共通実装(リポジトリルート)。`rule_based.py` / `llm_mock.py` / `optimization_based.py` はそのまま使える。`llm_real.py` はAPIキー設定が必要 |
 | (横断)構造検証 | `verification.py` | 共通実装(リポジトリルート)。`DisCoPy`で①〜④の型接続(合成則)を事後監査する。①〜④のような実行順序を持つパイプラインの一部ではない(D-13/D-21/D-40、CLAUDE.md 4章) |
+| (横断)アクセス制御 | `policy_engine.py`・`policy/access_control.rego` | 共通実装(リポジトリルート)。D-32の方針(認可はOPA/Cedar等が担う)を実際にOPAで組み込んだインタフェース検証。`environment.py`の壁判定(`EnvironmentClient.write_trace`)は置き換えず、⑤検証層と同じ「実行パイプラインの外側」の監査として独立に動作する(D-49) |
 | 逸脱注入シナリオ | `cases/<ケース名>/deviation_test.py` | ケースごとに書く。判定基準(効用差の計算方法等)はケースの性質に合わせる |
 | 検証キット(共通部分) | `verification_kit/montecarlo.py`・`mdp_convergence.py`・`gambit_collusion.py` | 共通実装(リポジトリルート) |
 | 検証キット(Quint) | `cases/<ケース名>/quint/` | ケースごとの状態機械を記述するため、ケース固有 |
