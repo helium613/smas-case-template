@@ -278,8 +278,8 @@
         </table>
       </div>
       <div class="dash-legend">
-        <span class="legend-item"><span class="chip yes">型準拠OK/収束/失敗</span>基準動作を確認、または逸脱がメカニズムに通用しなかった</span>
-        <span class="legend-item"><span class="chip no">成功/穴を発見</span>逸脱がメカニズムを実際に出し抜いた(脆弱性の発見)</span>
+        <span class="legend-item"><span class="chip yes">型準拠OK/収束/阻止</span>基準動作を確認、またはメカニズムが逸脱を阻止した</span>
+        <span class="legend-item"><span class="chip no">突破/穴を発見</span>逸脱がメカニズムを実際に突破した(脆弱性の発見)</span>
         <span class="legend-item"><span class="chip na">—</span>このケースでは未実施</span>
       </div>
       <div class="dash-note">
@@ -600,8 +600,8 @@
     },
     {
       name: "ルールベース(素朴な逸脱)", sub: "OverstatingRuleBasedAgent / GreedyOverstatingAgent",
-      c1: { kind: "held", metric: "失敗 0/1000" },
-      c2: { kind: "held", metric: "失敗 0/50" },
+      c1: { kind: "held", metric: "阻止 1000/1000" },
+      c2: { kind: "held", metric: "阻止 50/50" },
       c3: { kind: "na", metric: "—" },
       c4: { kind: "na", metric: "—" },
       note: "固定倍率・固定高値で申告する素朴な逸脱。GreedyOverstatingAgentはケース1→2で無改造のまま再利用し、いずれも失敗(#11の実例、メカニズムは頑健)。"
@@ -609,8 +609,8 @@
     {
       name: "ルールベース(巧妙な逸脱、ケース固有)", sub: "CreditLimitMaximizingAgent / BuryingStrategicAgent",
       c1: { kind: "na", metric: "—" },
-      c2: { kind: "exploited", metric: "成功 50/50" },
-      c3: { kind: "exploited", metric: "成功 16/200" },
+      c2: { kind: "exploited", metric: "突破 50/50" },
+      c3: { kind: "exploited", metric: "突破 16/200" },
       c4: { kind: "na", metric: "—" },
       note: "メカニズム固有の抜け道を突く戦略。信用枠は超えずその内側で過大申告する(D-37/38)、ボルダ得点の埋葬戦術(D-27/29)——いずれもメカニズムの脆弱性を実際に暴いた。"
     },
@@ -630,7 +630,7 @@
     {
       name: "最適化ベース", sub: "OptimizingBidderAgent / OptimizingCreditAwareAgent",
       c1: { kind: "held", metric: "収束(誤差<0.2)" },
-      c2: { kind: "exploited", metric: "成功 50/50" },
+      c2: { kind: "exploited", metric: "突破 50/50" },
       c3: { kind: "na", metric: "—" }, c4: { kind: "na", metric: "—" },
       note: "ケース1: 信念分布の形状によらず、期待効用を最大化する申告額が真の評価額に収束(D-34)——連続空間の数値探索でも抜け道が見つからなかった。ケース2: 逆に、信念分布が信用枠付近まで広がる場合は探索が信用枠の境界に収束し、貫くとhonestを上回る(D-45)——ルールベース・敵対的LLMとは独立の手段で、D-37/D-38と同じ脆弱性を確認した。他ケースでは未検証。"
     },
@@ -638,7 +638,7 @@
       name: "敵対的LLM", sub: "AdversarialToolUseAgent / AdversarialVotingAgent",
       c1: { kind: "na", metric: "—" },
       c2: { kind: "exploited", metric: "穴を発見" },
-      c3: { kind: "exploited", metric: "成功 2/3" }, c4: { kind: "na", metric: "—" },
+      c3: { kind: "exploited", metric: "突破 2/3" }, c4: { kind: "na", metric: "—" },
       note: "ケース2: 「信用枠内に留まる恒常的な過大申告」という検出ルールの穴を発見(D-37)。ケース3: 既知の埋葬戦術(BuryingStrategicAgent)を教えずに3ラウンド試したところ、2ラウンドは独立に同じ戦術へ到達し得をしたが、残り1ラウンドは自己流の亜種を試みて失敗し、honestと同水準の結果に終わった(D-46)——LLMの創発的な戦略は、既知の最適戦術に一致することもあれば、それより劣る独自解に迷い込むこともある。ケース1にはそもそも検出ルールが無いため対象外。"
     }
   ];
