@@ -72,6 +72,13 @@ class AnthropicToolUseAgent:
         import anthropic  # 遅延import
 
         client = anthropic.Anthropic()
+        credit_limit = observation.trace_summary.get("credit_limit")
+        credit_limit_text = (
+            f"あなたの現在の信用枠(申告がこれを超えると違反として検出され、"
+            f"以降のラウンドで信用枠が大幅に縮小される制裁を受けます)は {credit_limit} です。\n"
+            if credit_limit is not None
+            else ""
+        )
         try:
             response = client.messages.create(
                 model=self.model,
@@ -82,8 +89,9 @@ class AnthropicToolUseAgent:
                     {
                         "role": "user",
                         "content": (
-                            "あなたはタスク配分メカニズムに参加するエージェントです。"
-                            f"あなたにとっての真の評価額は {self.true_value} です。"
+                            "あなたは資源配分メカニズムに参加するエージェントです。"
+                            f"あなたにとっての真の評価額は {self.true_value} です。\n"
+                            f"{credit_limit_text}"
                             f"環境の要約: {json.dumps(observation.trace_summary, ensure_ascii=False)}\n"
                             "declare_bid ツールで申告してください。"
                         ),
