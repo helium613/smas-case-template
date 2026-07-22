@@ -186,6 +186,22 @@ def main() -> None:
             scene1_honest_utilities.append(utility)
     individual_rationality_holds = all(u >= -1e-9 for u in scene1_honest_utilities)
 
+    # --- 公平性(#10、Envy-freeness、D-51)。シーン1(正直申告)を再利用する ------------
+    envy_checks = 0
+    envy_violations = 0
+    for result in scene1_results:
+        if result.outcome.result is None or not result.outcome.result.allocated_agent_ids:
+            continue
+        winner_id = result.outcome.result.allocated_agent_ids[0]
+        winner_payment = result.outcome.result.payments.get(winner_id, 0.0)
+        for declaration in result.declarations:
+            if declaration.agent_id == winner_id:
+                continue
+            envy_checks += 1
+            if declaration.declared_value > winner_payment + 1e-9:
+                envy_violations += 1
+    envy_free_holds = envy_violations == 0
+
     # --- ③: モンテカルロ(耐戦略性の経験的頑健性) ------------------------------------
     true_values = {"alice": 10.0, "bob": 7.0}
 
@@ -376,6 +392,15 @@ def main() -> None:
     lines.append("## 5大指標に対応表がない評価観点(補足)")
     lines.append("")
     lines.append(f"- プラガブル性(#11): {check_pluggability()}")
+    lines.append(
+        f"- 公平性(#10、Envy-freeness、D-51で初検証): "
+        f"{'Pass' if envy_free_holds else 'Fail'} — シーン1(正直申告、{len(scene1_results)}ラウンド、"
+        f"{envy_checks}件の敗者×勝者の組)のいずれでも、敗者が勝者の結果(アイテム+支払い額)を"
+        f"羨むケースは無かった({envy_violations}/{envy_checks}件)。VCG(セカンドプライス)は、"
+        f"敗者の真の価値が定義上「勝者の支払い額(=2番目に高い申告額)」を超えないため、"
+        f"正直申告のもとでは理論上常に成立する性質(容易に証明できる古典的結果)であり、"
+        f"数値的に裏付けた。逸脱注入時(シーン2・3)や結託時の公平性までは検証していない。"
+    )
     lines.append("")
 
     lines.append("---")

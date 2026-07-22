@@ -220,6 +220,23 @@ def main() -> None:
         all(not s.outcome.terminated_by_fallback for s in scenes),
     )
 
+    # --- 公平性(#10、Envy-freeness、D-51) --------------------------------------------
+    scene1_results = [s for s in scenes if s.name == "scene1_honest"]
+    envy_violations = 0
+    for result in scene1_results:
+        if result.outcome.result is None or not result.outcome.result.allocated_agent_ids:
+            continue
+        winner_id = result.outcome.result.allocated_agent_ids[0]
+        winner_payment = result.outcome.result.payments.get(winner_id, 0.0)
+        for declaration in result.declarations:
+            if declaration.agent_id != winner_id and declaration.declared_value > winner_payment + 1e-9:
+                envy_violations += 1
+    check(
+        "シーン1(#10、Envy-freeness): 正直申告のもとでは、いかなる敗者も勝者の結果を羨まない"
+        "(敗者の真の価値は定義上、勝者の支払い額=2番目に高い申告額を超えないため)",
+        envy_violations == 0,
+    )
+
     scene2_results = [s for s in scenes if s.name == "scene2_deviation_injected"]
     carol_wins_in_scene2 = sum(1 for r in scene2_results if "carol" in r.outcome.result.allocated_agent_ids)
     check(
