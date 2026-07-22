@@ -1,0 +1,440 @@
+<title>委任連鎖の解決 — Liquid Democracy</title>
+<style>
+  :root {
+    --bg: #f3f1ec;
+    --panel: #ffffff;
+    --panel-2: #ece9e2;
+    --border: #d8d3c8;
+    --text: #23211d;
+    --text-muted: #6b6558;
+    --text-faint: #a29c8c;
+    --accent-yes: #1f8a68;
+    --accent-yes-bg: #dcf1e9;
+    --accent-no: #b2502a;
+    --accent-no-bg: #f6e4da;
+    --accent-void: #8a8478;
+    --accent-void-bg: #e7e3d9;
+    --accent-active: #b8860f;
+    --accent-active-bg: #f7ecd0;
+    --edge: #b7b0a1;
+    --edge-active: #b8860f;
+    --shadow: 0 1px 2px rgba(35,33,29,0.06), 0 8px 24px rgba(35,33,29,0.06);
+    --font-display: -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", "Consolas", "Menlo", monospace;
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161b;
+    --panel: #1b1e25;
+    --panel-2: #21242c;
+    --border: #2e323c;
+    --text: #e9e6de;
+    --text-muted: #97917f;
+    --text-faint: #6b6658;
+    --accent-yes: #4bd3a4;
+    --accent-yes-bg: #16332a;
+    --accent-no: #ec8c62;
+    --accent-no-bg: #3a2419;
+    --accent-void: #8b8676;
+    --accent-void-bg: #2a2822;
+    --accent-active: #e8bc4e;
+    --accent-active-bg: #382d13;
+    --edge: #3d414c;
+    --edge-active: #e8bc4e;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161b;
+      --panel: #1b1e25;
+      --panel-2: #21242c;
+      --border: #2e323c;
+      --text: #e9e6de;
+      --text-muted: #97917f;
+      --text-faint: #6b6658;
+      --accent-yes: #4bd3a4;
+      --accent-yes-bg: #16332a;
+      --accent-no: #ec8c62;
+      --accent-no-bg: #3a2419;
+      --accent-void: #8b8676;
+      --accent-void-bg: #2a2822;
+      --accent-active: #e8bc4e;
+      --accent-active-bg: #382d13;
+      --edge: #3d414c;
+      --edge-active: #e8bc4e;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-display);
+    padding: 28px;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+  header { display: flex; flex-direction: column; gap: 6px; }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+  h1 { font-size: 24px; font-weight: 650; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  .sub { color: var(--text-muted); font-size: 14px; max-width: 62ch; line-height: 1.55; margin: 2px 0 0; }
+  .sub code { font-family: var(--font-mono); font-size: 12.5px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .stage { padding: 6px 6px 0; }
+  .stage svg { width: 100%; height: auto; display: block; }
+
+  .node circle {
+    fill: var(--panel-2);
+    stroke: var(--edge);
+    stroke-width: 1.6;
+    transition: fill 420ms ease, stroke 420ms ease, filter 420ms ease;
+  }
+  .node.state-idle circle { fill: var(--panel-2); stroke: var(--edge); }
+  .node.state-active circle { fill: var(--accent-active-bg); stroke: var(--accent-active); stroke-width: 2.4; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent-active) 55%, transparent)); }
+  .node.state-yes circle { fill: var(--accent-yes-bg); stroke: var(--accent-yes); stroke-width: 2.2; }
+  .node.state-no circle { fill: var(--accent-no-bg); stroke: var(--accent-no); stroke-width: 2.2; }
+  .node.state-void circle { fill: var(--accent-void-bg); stroke: var(--accent-void); stroke-width: 2.2; stroke-dasharray: 4 3; }
+
+  .node text.label { font-family: var(--font-mono); font-size: 13px; font-weight: 600; fill: var(--text); }
+  .node text.role { font-family: var(--font-mono); font-size: 9.5px; fill: var(--text-faint); letter-spacing: 0.02em; }
+  .node text.tag { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em; }
+  .node.state-yes text.tag { fill: var(--accent-yes); }
+  .node.state-no text.tag { fill: var(--accent-no); }
+  .node.state-void text.tag { fill: var(--accent-void); }
+  .node.state-active text.tag { fill: var(--accent-active); }
+  .node.state-idle text.tag { fill: var(--text-faint); }
+
+  .edge path { fill: none; stroke: var(--edge); stroke-width: 1.6; transition: stroke 380ms ease, stroke-width 380ms ease, filter 380ms ease; marker-end: url(#arrow); }
+  .edge.active path { stroke: var(--edge-active); stroke-width: 2.6; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--edge-active) 60%, transparent)); marker-end: url(#arrow-active); }
+  .edge.void path { stroke: var(--accent-void); stroke-dasharray: 3 3; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px 20px; padding: 14px 18px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); }
+  .legend-item { display: flex; align-items: center; gap: 7px; }
+  .swatch { width: 11px; height: 11px; border-radius: 50%; border: 1.6px solid; flex: none; }
+  .swatch.yes { background: var(--accent-yes-bg); border-color: var(--accent-yes); }
+  .swatch.no { background: var(--accent-no-bg); border-color: var(--accent-no); }
+  .swatch.void { background: var(--accent-void-bg); border-color: var(--accent-void); border-style: dashed; }
+  .swatch.active { background: var(--accent-active-bg); border-color: var(--accent-active); }
+  .swatch.idle { background: var(--panel-2); border-color: var(--edge); }
+
+  .side { display: flex; flex-direction: column; gap: 14px; }
+
+  .controls { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  button {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 7px;
+    padding: 7px 13px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    cursor: pointer;
+    transition: background 150ms ease, border-color 150ms ease, transform 80ms ease;
+  }
+  button:hover { border-color: var(--accent-active); }
+  button:active { transform: translateY(1px); }
+  button:focus-visible { outline: 2px solid var(--accent-active); outline-offset: 2px; }
+  button.primary { background: var(--accent-active); border-color: var(--accent-active); color: #22190a; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .step-count { margin-left: auto; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+  .log { padding: 14px 16px; display: flex; flex-direction: column; gap: 9px; max-height: 320px; overflow-y: auto; }
+  .log-entry { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--text-muted); padding-left: 14px; border-left: 2px solid var(--border); opacity: 0; transform: translateY(3px); animation: entry-in 320ms ease forwards; }
+  .log-entry.current { color: var(--text); border-left-color: var(--accent-active); }
+  .log-entry b { color: var(--text); font-weight: 700; }
+  .log-entry .y { color: var(--accent-yes); font-weight: 700; }
+  .log-entry .n { color: var(--accent-no); font-weight: 700; }
+  .log-entry .v { color: var(--accent-void); font-weight: 700; }
+  @keyframes entry-in { to { opacity: 1; transform: translateY(0); } }
+
+  .tally { padding: 14px 16px; border-top: 1px solid var(--border); }
+  .tally h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin: 0 0 10px; font-weight: 650; }
+  .bars { display: flex; flex-direction: column; gap: 7px; }
+  .bar-row { display: grid; grid-template-columns: 34px 1fr 28px; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; }
+  .bar-track { height: 9px; background: var(--panel-2); border-radius: 5px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 5px; width: 0%; transition: width 500ms cubic-bezier(.22,.9,.3,1); }
+  .bar-fill.yes { background: var(--accent-yes); }
+  .bar-fill.no { background: var(--accent-no); }
+  .bar-count { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+  .winner { margin-top: 12px; font-family: var(--font-mono); font-size: 12.5px; color: var(--text-muted); padding: 9px 11px; border-radius: 7px; background: var(--panel-2); border: 1px solid var(--border); }
+  .winner b { color: var(--text); }
+
+  .source { padding: 12px 16px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); line-height: 1.6; }
+  .source code { color: var(--text-muted); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .node circle, .edge path, .bar-fill { transition-duration: 1ms !important; }
+    .log-entry { animation-duration: 1ms !important; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">SMAS — cases/liquid_democracy — 可視化プロトタイプ</span>
+    <h1>委任連鎖の解決を1ステップずつ見る</h1>
+    <p class="sub">
+      <code>incentive_engine.resolve_delegations()</code> が実際に計算した結果を、
+      直接投票・委任チェーン・循環委任の3パターンで再生する。数値は
+      <code>smoke_test.py</code> のシーン1・シーン2と同じ入力から得たもの。
+    </p>
+  </header>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="stage">
+        <svg viewBox="0 0 720 460" xmlns="http://www.w3.org/2000/svg" aria-label="委任グラフ">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"></path>
+            </marker>
+            <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--edge-active)"></path>
+            </marker>
+          </defs>
+
+          <g class="edges">
+            <g class="edge" data-edge="dave-carol"><path d="M110,230 L250,230"></path></g>
+            <g class="edge" data-edge="carol-alice"><path d="M310,215 L400,140"></path></g>
+            <g class="edge" data-edge="frank-grace"><path d="M545,150 L640,225"></path></g>
+            <g class="edge" data-edge="grace-heidi"><path d="M645,270 L560,345"></path></g>
+            <g class="edge" data-edge="heidi-frank"><path d="M520,340 L510,180"></path></g>
+          </g>
+
+          <g class="nodes">
+            <g class="node state-idle" data-node="dave" transform="translate(80,230)">
+              <circle r="30"></circle>
+              <text class="label" y="-4" text-anchor="middle">dave</text>
+              <text class="role" y="10" text-anchor="middle">委任→carol</text>
+              <text class="tag" y="46" text-anchor="middle">—</text>
+            </g>
+            <g class="node state-idle" data-node="carol" transform="translate(280,225)">
+              <circle r="30"></circle>
+              <text class="label" y="-4" text-anchor="middle">carol</text>
+              <text class="role" y="10" text-anchor="middle">委任→alice</text>
+              <text class="tag" y="46" text-anchor="middle">—</text>
+            </g>
+            <g class="node state-idle" data-node="alice" transform="translate(430,120)">
+              <circle r="32"></circle>
+              <text class="label" y="-4" text-anchor="middle">alice</text>
+              <text class="role" y="10" text-anchor="middle">直接投票</text>
+              <text class="tag" y="48" text-anchor="middle">—</text>
+            </g>
+            <g class="node state-idle" data-node="bob" transform="translate(430,360)">
+              <circle r="32"></circle>
+              <text class="label" y="-4" text-anchor="middle">bob</text>
+              <text class="role" y="10" text-anchor="middle">直接投票</text>
+              <text class="tag" y="48" text-anchor="middle">—</text>
+            </g>
+            <g class="node state-idle" data-node="frank" transform="translate(510,150)">
+              <circle r="30"></circle>
+              <text class="label" y="-4" text-anchor="middle">frank</text>
+              <text class="role" y="10" text-anchor="middle">委任→grace</text>
+              <text class="tag" y="46" text-anchor="middle">—</text>
+            </g>
+            <g class="node state-idle" data-node="grace" transform="translate(660,240)">
+              <circle r="30"></circle>
+              <text class="label" y="-4" text-anchor="middle">grace</text>
+              <text class="role" y="10" text-anchor="middle">委任→heidi</text>
+              <text class="tag" y="46" text-anchor="middle">—</text>
+            </g>
+            <g class="node state-idle" data-node="heidi" transform="translate(540,360)">
+              <circle r="30"></circle>
+              <text class="label" y="-4" text-anchor="middle">heidi</text>
+              <text class="role" y="10" text-anchor="middle">委任→frank</text>
+              <text class="tag" y="46" text-anchor="middle">—</text>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="swatch idle"></span>未解決</span>
+        <span class="legend-item"><span class="swatch active"></span>解決中(辿っている辺)</span>
+        <span class="legend-item"><span class="swatch yes"></span>yesに解決</span>
+        <span class="legend-item"><span class="swatch no"></span>noに解決</span>
+        <span class="legend-item"><span class="swatch void"></span>無効票(循環)</span>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="panel">
+        <div class="controls">
+          <button id="btn-reset">最初から</button>
+          <button id="btn-prev">戻る</button>
+          <button id="btn-next" class="primary">次へ ▸</button>
+          <span class="step-count" id="step-count">0 / 0</span>
+        </div>
+        <div class="log" id="log"></div>
+        <div class="tally">
+          <h2>集計</h2>
+          <div class="bars">
+            <div class="bar-row">
+              <span>yes</span>
+              <div class="bar-track"><div class="bar-fill yes" id="bar-yes"></div></div>
+              <span class="bar-count" id="count-yes">0</span>
+            </div>
+            <div class="bar-row">
+              <span>no</span>
+              <div class="bar-track"><div class="bar-fill no" id="bar-no"></div></div>
+              <span class="bar-count" id="count-no">0</span>
+            </div>
+          </div>
+          <div class="winner" id="winner">結果はステップを進めると表示されます。</div>
+        </div>
+        <div class="source">
+          入力: <code>Declaration(dave→carol→alice="yes"), Declaration(bob="no"), Declaration(frank→grace→heidi→frank)</code><br>
+          出典: cases/liquid_democracy/smoke_test.py シーン1・シーン2相当
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // resolve_delegations() が実際に返した結果(engine.py, D-31修正後)をそのまま使う。
+  var steps = [
+    { log: "解決を開始する。全ノードは未解決(idle)。", nodes: {}, edges: [] },
+
+    { log: "<b>dave</b> は委任先(carol)を持つ→辺を辿る。", nodes: { dave: "active" }, edges: ["dave-carol"] },
+    { log: "<b>carol</b> も委任先(alice)を持つ→さらに辿る。", nodes: { dave: "active", carol: "active" }, edges: ["dave-carol", "carol-alice"] },
+    { log: "<b>alice</b> は直接投票者→申告どおり <span class=\"y\">yes</span> で確定。", nodes: { dave: "active", carol: "active", alice: "yes" }, edges: ["dave-carol", "carol-alice"] },
+    { log: "巻き戻り: carol の実効票 = alice の <span class=\"y\">yes</span>。", nodes: { dave: "active", carol: "yes", alice: "yes" }, edges: ["dave-carol"] },
+    { log: "巻き戻り: dave の実効票 = carol 経由で <span class=\"y\">yes</span>。連鎖(dave→carol→alice)が解決した。", nodes: { dave: "yes", carol: "yes", alice: "yes" }, edges: [] },
+
+    { log: "<b>bob</b> は直接投票者→申告どおり <span class=\"n\">no</span> で確定。", nodes: { bob: "active" }, edges: [] },
+    { log: "bob の解決が完了: <span class=\"n\">no</span>。", nodes: { bob: "no" }, edges: [] },
+
+    { log: "<b>frank</b> は委任先(grace)を持つ→辺を辿る。", nodes: { frank: "active" }, edges: ["frank-grace"] },
+    { log: "<b>grace</b> も委任先(heidi)を持つ→さらに辿る。", nodes: { frank: "active", grace: "active" }, edges: ["frank-grace", "grace-heidi"] },
+    { log: "<b>heidi</b> の委任先は frank——<span class=\"v\">すでに経路上に存在する</span>。循環を検出。", nodes: { frank: "active", grace: "active", heidi: "active" }, edges: ["frank-grace", "grace-heidi", "heidi-frank"] },
+    { log: "経路上の frank・grace・heidi 全員を<span class=\"v\">無効票</span>にする(打ち切りルールと同じ思想: 例外を投げず、固定の挙動にフォールバックする)。", nodes: { frank: "void", grace: "void", heidi: "void" }, edges: ["heidi-frank"], voidEdges: ["frank-grace", "grace-heidi", "heidi-frank"] },
+
+    { log: "全員の解決が完了。<b>重みの保存則</b>: 有効票(4)+無効票(3) = 参加者数(7)。", nodes: {}, edges: [], final: true }
+  ];
+
+  var nodeIds = ["dave", "carol", "alice", "bob", "frank", "grace", "heidi"];
+  var edgeIds = ["dave-carol", "carol-alice", "frank-grace", "grace-heidi", "heidi-frank"];
+  var current = 0;
+  var cumulativeState = {};
+
+  var logEl = document.getElementById("log");
+  var stepCountEl = document.getElementById("step-count");
+  var winnerEl = document.getElementById("winner");
+  var barYes = document.getElementById("bar-yes");
+  var barNo = document.getElementById("bar-no");
+  var countYes = document.getElementById("count-yes");
+  var countNo = document.getElementById("count-no");
+
+  function nodeEl(id) { return document.querySelector('.node[data-node="' + id + '"]'); }
+  function edgeEl(id) { return document.querySelector('.edge[data-edge="' + id + '"]'); }
+
+  function render() {
+    // reset
+    nodeIds.forEach(function (id) {
+      var el = nodeEl(id);
+      el.className = "node state-idle";
+      el.querySelector(".tag").textContent = "—";
+    });
+    edgeIds.forEach(function (id) {
+      var el = edgeEl(id);
+      el.className = "edge";
+    });
+
+    // replay cumulative node states up to `current`
+    var resolved = {};
+    for (var s = 0; s <= current; s++) {
+      var st = steps[s];
+      for (var k in st.nodes) resolved[k] = st.nodes[k];
+      if (st.voidEdges) {
+        st.voidEdges.forEach(function (eid) {
+          var el = edgeEl(eid);
+          if (el) el.classList.add("void");
+        });
+      }
+    }
+    nodeIds.forEach(function (id) {
+      if (resolved[id]) {
+        var el = nodeEl(id);
+        el.className = "node state-" + resolved[id];
+        var tagText = resolved[id] === "yes" ? "YES" : resolved[id] === "no" ? "NO" : resolved[id] === "active" ? "解決中" : resolved[id] === "void" ? "無効" : "—";
+        el.querySelector(".tag").textContent = tagText;
+      }
+    });
+
+    var activeEdges = steps[current].edges || [];
+    activeEdges.forEach(function (id) {
+      var el = edgeEl(id);
+      if (el) el.classList.add("active");
+    });
+
+    // log: show all entries up to current, most recent marked current
+    logEl.innerHTML = "";
+    for (var i = 0; i <= current; i++) {
+      var div = document.createElement("div");
+      div.className = "log-entry" + (i === current ? " current" : "");
+      div.innerHTML = steps[i].log;
+      div.style.animationDelay = "0ms";
+      logEl.appendChild(div);
+    }
+    logEl.scrollTop = logEl.scrollHeight;
+
+    stepCountEl.textContent = current + " / " + (steps.length - 1);
+
+    // tally (only meaningful at final step, but show live partial count too)
+    var yesCount = 0, noCount = 0, voidCount = 0;
+    nodeIds.forEach(function (id) {
+      if (resolved[id] === "yes") yesCount++;
+      else if (resolved[id] === "no") noCount++;
+      else if (resolved[id] === "void") voidCount++;
+    });
+    var total = Math.max(yesCount + noCount, 1);
+    barYes.style.width = (yesCount / total * 100) + "%";
+    barNo.style.width = (noCount / total * 100) + "%";
+    countYes.textContent = yesCount;
+    countNo.textContent = noCount;
+
+    if (steps[current].final) {
+      winnerEl.innerHTML = "採用: <b>yes</b>(" + yesCount + "対" + noCount + ")。無効票 " + voidCount + " 件(循環)。";
+    } else {
+      winnerEl.textContent = "結果はステップを進めると表示されます。";
+    }
+
+    document.getElementById("btn-prev").disabled = current === 0;
+    document.getElementById("btn-next").disabled = current === steps.length - 1;
+  }
+
+  document.getElementById("btn-next").addEventListener("click", function () {
+    if (current < steps.length - 1) { current++; render(); }
+  });
+  document.getElementById("btn-prev").addEventListener("click", function () {
+    if (current > 0) { current--; render(); }
+  });
+  document.getElementById("btn-reset").addEventListener("click", function () {
+    current = 0; render();
+  });
+
+  render();
+})();
+</script>

@@ -1,0 +1,378 @@
+<title>SMAS ケース横断可視化</title>
+<style>
+  :root {
+    --bg: #f3f1ec;
+    --panel: #ffffff;
+    --panel-2: #ece9e2;
+    --panel-3: #e2ded2;
+    --border: #d8d3c8;
+    --text: #23211d;
+    --text-muted: #6b6558;
+    --text-faint: #a29c8c;
+    --accent: #8a5a2e;
+    --accent-bg: #f3e6d6;
+    --good: #1f8a68;
+    --good-bg: #dcf1e9;
+    --bad: #b2502a;
+    --bad-bg: #f6e4da;
+    --mixed: #a4791f;
+    --mixed-bg: #f5ecd2;
+    --na: #8a8478;
+    --na-bg: #e7e3d9;
+    --shadow: 0 1px 2px rgba(35,33,29,0.06), 0 8px 24px rgba(35,33,29,0.06);
+    --font-display: -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", "Consolas", "Menlo", monospace;
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161b; --panel: #1b1e25; --panel-2: #21242c; --panel-3: #262a33; --border: #2e323c;
+    --text: #e9e6de; --text-muted: #97917f; --text-faint: #6b6658;
+    --accent: #d3a86a; --accent-bg: #3a2c17;
+    --good: #4bd3a4; --good-bg: #16332a;
+    --bad: #ec8c62; --bad-bg: #3a2419;
+    --mixed: #e0bd5c; --mixed-bg: #362c11;
+    --na: #8b8676; --na-bg: #2a2822;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161b; --panel: #1b1e25; --panel-2: #21242c; --panel-3: #262a33; --border: #2e323c;
+      --text: #e9e6de; --text-muted: #97917f; --text-faint: #6b6658;
+      --accent: #d3a86a; --accent-bg: #3a2c17;
+      --good: #4bd3a4; --good-bg: #16332a;
+      --bad: #ec8c62; --bad-bg: #3a2419;
+      --mixed: #e0bd5c; --mixed-bg: #362c11;
+      --na: #8b8676; --na-bg: #2a2822;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-display); padding: 28px; }
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+  header { display: flex; flex-direction: column; gap: 6px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); }
+  h1 { font-size: 24px; font-weight: 650; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .sub { color: var(--text-muted); font-size: 14px; max-width: 68ch; line-height: 1.55; margin: 2px 0 0; }
+  .sub code { font-family: var(--font-mono); font-size: 12.5px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+
+  .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+  .tab {
+    font-family: var(--font-display); font-size: 13.5px; font-weight: 650;
+    padding: 9px 16px; border: 1px solid transparent; border-bottom: none;
+    border-radius: 8px 8px 0 0; background: none; color: var(--text-muted); cursor: pointer;
+    margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--text); background: var(--panel); border-color: var(--border); border-bottom-color: var(--panel); }
+  .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 0 12px 12px 12px; box-shadow: var(--shadow); }
+
+  /* ---------- Pipeline view ---------- */
+  .case-picker { display: flex; gap: 8px; flex-wrap: wrap; padding: 18px 20px 0; }
+  .case-btn {
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+    padding: 7px 12px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text-muted); cursor: pointer;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .case-btn:hover { border-color: var(--accent); color: var(--text); }
+  .case-btn.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+  .case-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .pipeline { padding: 26px 20px 22px; overflow-x: auto; }
+  .flow { display: flex; align-items: stretch; gap: 0; min-width: 880px; }
+  .stage { flex: 1; display: flex; flex-direction: column; gap: 8px; position: relative; }
+  .arrow-gap { width: 28px; flex: none; display: flex; align-items: center; justify-content: center; padding-top: 40px; }
+  .arrow-gap svg { color: var(--text-faint); }
+
+  .badge { align-self: flex-start; font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; }
+  .badge.common { background: var(--na-bg); color: var(--na); }
+  .badge.swap { background: var(--accent-bg); color: var(--accent); }
+
+  .stage-card {
+    border: 1.6px solid var(--border); border-radius: 10px; padding: 14px 14px 16px;
+    background: var(--panel-2); min-height: 168px; display: flex; flex-direction: column; gap: 8px;
+    transition: border-color 320ms ease, background 320ms ease;
+  }
+  .stage-card.swap { border-color: var(--accent); background: var(--accent-bg); }
+  .stage-num { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+  .stage-title { font-size: 14px; font-weight: 700; }
+  .stage-code { font-family: var(--font-mono); font-size: 11.5px; color: var(--accent); word-break: break-word; line-height: 1.5; }
+  .stage-card.common .stage-code { color: var(--text-muted); }
+  .stage-desc { font-size: 12px; color: var(--text-muted); line-height: 1.55; margin-top: auto; }
+
+  .verify-note {
+    margin: 0 20px 20px; padding: 12px 14px; border-radius: 9px; border: 1.4px dashed var(--border);
+    font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); line-height: 1.6;
+  }
+  .verify-note b { color: var(--text); }
+
+  .claim {
+    margin: 0 20px 20px; padding: 13px 16px; border-radius: 9px; background: var(--panel-3);
+    font-size: 13px; color: var(--text-muted); line-height: 1.6;
+  }
+  .claim b { color: var(--text); }
+
+  /* ---------- Dashboard view ---------- */
+  .dash-table { width: 100%; border-collapse: collapse; }
+  .dash-table th { text-align: left; font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 650; padding: 14px 14px 10px; border-bottom: 1px solid var(--border); }
+  .dash-table th:first-child { padding-left: 20px; }
+  .dash-table td { padding: 14px; vertical-align: top; border-bottom: 1px solid var(--border); }
+  .dash-table td:first-child { padding-left: 20px; }
+  .dash-table tr:last-child td { border-bottom: none; }
+  .case-name { font-weight: 700; font-size: 13.5px; white-space: nowrap; }
+  .case-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
+
+  .cell { display: flex; flex-direction: column; gap: 5px; min-width: 168px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; padding: 2px 8px; border-radius: 999px; width: fit-content; }
+  .chip.yes { background: var(--good-bg); color: var(--good); }
+  .chip.no { background: var(--bad-bg); color: var(--bad); }
+  .chip.mixed { background: var(--mixed-bg); color: var(--mixed); }
+  .chip.na { background: var(--na-bg); color: var(--na); }
+  .cell-text { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
+  .cell-text code { font-family: var(--font-mono); font-size: 10.5px; }
+
+  .dash-legend { display: flex; flex-wrap: wrap; gap: 14px 20px; padding: 14px 20px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+  .dash-legend .legend-item { display: flex; align-items: center; gap: 6px; }
+
+  .dash-note { margin: 16px 20px 20px; padding: 12px 14px; border-radius: 9px; border: 1.4px dashed var(--border); font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+  .dash-note b { color: var(--text); }
+
+  .source { padding: 12px 20px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); line-height: 1.6; }
+
+  @media (max-width: 880px) {
+    .dash-table { display: block; overflow-x: auto; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">SMAS — ケース横断可視化プロトタイプ</span>
+    <h1>4ケースを、共通の骨格の上で見る</h1>
+    <p class="sub">
+      ケース固有の可視化(例: <code>cases/liquid_democracy/visualize/</code>)とは別に、
+      「同じ5層パイプラインが、②誘因構造層と④実行主体層だけを差し替えて4つの異なる
+      メカニズムを収容している」という、このリポジトリの核心主張そのものを見る。
+    </p>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-view="pipeline" role="tab" aria-selected="true">① アーキテクチャ(共通骨格)</button>
+    <button class="tab" data-view="dashboard" role="tab" aria-selected="false">② 5大指標ダッシュボード</button>
+  </div>
+
+  <!-- ================= Pipeline view ================= -->
+  <div class="view active" id="view-pipeline">
+    <div class="panel">
+      <div class="case-picker" id="case-picker"></div>
+      <div class="pipeline">
+        <div class="flow" id="flow"></div>
+      </div>
+      <div class="claim" id="claim"></div>
+      <div class="verify-note">
+        <b>検証は実行パイプラインの外側</b>にいる——上の流れには含まれず、①〜④の型接続を
+        事後的に監査する横断的な存在(<code>verification.run_structural_verification</code>、
+        4ケースとも無変更)。CLAUDE.md 4章では「(横断)構造検証」として、①〜④の番号付き
+        パイプラインとは別枠に位置づけている(D-13/D-21/D-40)。
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Dashboard view ================= -->
+  <div class="view" id="view-dashboard">
+    <div class="panel">
+      <div style="overflow-x:auto;">
+        <table class="dash-table">
+          <thead>
+            <tr>
+              <th>ケース</th>
+              <th>①到達可能性</th>
+              <th>②収束性</th>
+              <th>③頑健性</th>
+              <th>④資源コスト</th>
+              <th>⑤検証可能性</th>
+            </tr>
+          </thead>
+          <tbody id="dash-body"></tbody>
+        </table>
+      </div>
+      <div class="dash-legend">
+        <span class="legend-item"><span class="chip yes">PASS</span>すべて満たす</span>
+        <span class="legend-item"><span class="chip no">FAIL</span>満たさない(意図的な場合を含む)</span>
+        <span class="legend-item"><span class="chip mixed">MIXED</span>観点によって結果が割れる</span>
+        <span class="legend-item"><span class="chip na">N/A</span>このケースには適用対象外</span>
+      </div>
+      <div class="dash-note">
+        <b>注意</b>: 「③頑健性」はケースごとに<b>違う軸</b>を測っている。ケース1・2は「単独/巧妙な
+        逸脱への耐性」、ケース3は「意図的に壊した設計を正しく検出できるか」、ケース4は
+        「ランダム・敵対的な委任グラフへの構造的頑健性(集計方式自体は別途耐戦略性を満たす設計)」。
+        同じ列に並んでいても同じ物差しではないため、チップだけでなく右の説明文まで読む必要がある。
+      </div>
+      <div class="source">出典: 各ケースの <code>results/summary.md</code>(2026-07-22 生成分)。数値は捏造せず転記。</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var cases = [
+    {
+      id: "task_allocation", label: "①タスク配分", subtitle: "VCG・セカンドプライス",
+      layer2: { name: "SingleItemVcgEngine", desc: "支払いあり・1回性。最高申告者が勝ち、2番目の価格を払う" },
+      layer4: { name: "Honest / Mock / LLM実物 / 最適化ベース", desc: "4実装(D-34まで)" },
+      claim: "支払いを使って、1ラウンド完結で耐戦略性(単独逸脱)を成立させる、最も理論的に厳密な設計。"
+    },
+    {
+      id: "credit_allocation", label: "②信用枠配分", subtitle: "トリガー戦略",
+      layer2: { name: "TriggerStrategyEngine", desc: "支払いなし・繰り返しゲーム。信用枠を超えると制裁" },
+      layer4: { name: "CreditAware / CreditLimitMaximizing / 敵対的LLM", desc: "3実装(D-38まで)" },
+      claim: "支払いを使わず、将来の信用喪失という脅しだけで協調を成立させる、性質の異なるファミリー。"
+    },
+    {
+      id: "proposal_voting", label: "③投票", subtitle: "ボルダ得点",
+      layer2: { name: "BordaVotingEngine", desc: "支払いなし・1回性。順位申告をボルダ得点で集計" },
+      layer4: { name: "Honest / 埋葬戦術", desc: "2実装" },
+      claim: "あえて非耐戦略性の設計を採用し、検証層が「悪い設計」を正しく検出できるかを試す。"
+    },
+    {
+      id: "liquid_democracy", label: "④Liquid Democracy", subtitle: "委任連鎖",
+      layer2: { name: "LiquidDemocracyEngine", desc: "支払いなし。委任連鎖を解決し二択多数決" },
+      layer4: { name: "DirectVoting / Delegating", desc: "2実装" },
+      claim: "集計方式でなく、委任という構造そのもの(循環・重みの保存則)に焦点を当てる。"
+    }
+  ];
+
+  var common = {
+    l1: { name: "EnvironmentClient", desc: "痕跡の読み書き・指数減衰・壁(自領域のみ書込み可)。environment.py、4ケース無変更" },
+    l3: { name: "run_mechanism()", desc: "打ち切りルール(最大試行回数・タイムアウト・フォールバック)。aggregation.py、4ケース無変更" },
+    l5: { name: "run_structural_verification()", desc: "DisCoPyで結合律・単位律・境界型一致・権力集中の不在を検査。verification.py、4ケース無変更" }
+  };
+
+  var arrowSvg = '<svg width="20" height="16" viewBox="0 0 20 16" fill="none"><path d="M0 8H18M18 8L12 2M18 8L12 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  var picker = document.getElementById("case-picker");
+  var flow = document.getElementById("flow");
+  var claimEl = document.getElementById("claim");
+  var currentCase = cases[0].id;
+
+  function findCase(id) { return cases.filter(function (c) { return c.id === id; })[0]; }
+
+  function renderPicker() {
+    picker.innerHTML = "";
+    cases.forEach(function (c) {
+      var btn = document.createElement("button");
+      btn.className = "case-btn" + (c.id === currentCase ? " active" : "");
+      btn.textContent = c.label;
+      btn.addEventListener("click", function () { currentCase = c.id; render(); });
+      picker.appendChild(btn);
+    });
+  }
+
+  function stageCard(num, title, code, desc, isSwap) {
+    return (
+      '<div class="stage-card ' + (isSwap ? "swap" : "common") + '">' +
+      '<span class="badge ' + (isSwap ? "swap" : "common") + '">' + (isSwap ? "ケース固有" : "共通・無変更") + "</span>" +
+      '<div class="stage-num">' + num + "</div>" +
+      '<div class="stage-title">' + title + "</div>" +
+      '<div class="stage-code">' + code + "</div>" +
+      '<div class="stage-desc">' + desc + "</div>" +
+      "</div>"
+    );
+  }
+
+  function render() {
+    renderPicker();
+    var c = findCase(currentCase);
+    var stages = [
+      { num: "①環境層", title: "Environment", code: common.l1.name, desc: common.l1.desc, swap: false },
+      { num: "④実行主体層", title: "Agent", code: c.layer4.name, desc: c.layer4.desc, swap: true },
+      { num: "③集約層", title: "Aggregation", code: common.l3.name, desc: common.l3.desc, swap: false },
+      { num: "②誘因構造層", title: "Incentive Engine", code: c.layer2.name, desc: c.layer2.desc, swap: true },
+      { num: "①環境層", title: "Environment(書き戻し)", code: common.l1.name, desc: "参加記録を各自の領域に書き込む", swap: false }
+    ];
+    var html = "";
+    stages.forEach(function (s, i) {
+      html += '<div class="stage">' + stageCard(s.num, s.title, s.code, s.desc, s.swap) + "</div>";
+      if (i < stages.length - 1) html += '<div class="arrow-gap">' + arrowSvg + "</div>";
+    });
+    flow.innerHTML = html;
+    claimEl.innerHTML = "<b>" + c.label + "(" + c.subtitle + ")</b>: " + c.claim + " —— ①③はそのまま、②④だけが差し替わっている。";
+  }
+
+  render();
+
+  // ---------------- dashboard ----------------
+  var dash = [
+    {
+      name: "①タスク配分", sub: "VCG",
+      r1: ["yes", "個人合理性・権力集中の不在ともに成立"],
+      r2: ["na", "1回性のためMDP適用対象外"],
+      r3: ["mixed", "単独逸脱には頑健(0/1000)。結託には満たさない(pygambit, D-33)"],
+      r4: ["na", "全チェック計 1ms未満〜50ms"],
+      r5: ["yes", "DisCoPy Pass / Quintシミュレーション Pass"]
+    },
+    {
+      name: "②信用枠配分", sub: "トリガー戦略",
+      r1: ["yes", "個人合理性・権力集中の不在ともに成立(介入ポート行使済み)"],
+      r2: ["yes", "MDPで「常に遵守」が最適方策として収束(value=37.55)"],
+      r3: ["no", "総合結論は満たさない。素朴逸脱には頑健(0/50)だが、信用枠内の巧妙な過大申告には脆弱(50/50、D-37/38)"],
+      r4: ["na", "4シーンデモ計 6ms、モンテカルロ計 0.5秒未満"],
+      r5: ["yes", "DisCoPy Pass / Quintシミュレーション Pass"]
+    },
+    {
+      name: "③投票", sub: "ボルダ得点",
+      r1: ["yes", "個人合理性・権力集中の不在ともに成立(LangGraph実地検証済み)"],
+      r2: ["na", "1回性のためMDP適用対象外"],
+      r3: ["no", "満たさない(意図的)。埋葬戦術8.0%成功、結託ではさらに強い均衡が発生(D-39)"],
+      r4: ["na", "全チェック計 4ms〜4秒(2シーン構成込み)"],
+      r5: ["yes", "DisCoPy Pass / Quintシミュレーション Pass"]
+    },
+    {
+      name: "④Liquid Democracy", sub: "委任連鎖",
+      r1: ["yes", "個人合理性は成立。権力集中は「自発的委任は#14の懸念と別物」と定義を再整理"],
+      r2: ["na", "1回性のためMDP適用対象外。ただし委任の忠実性(#19)を初検証、合致"],
+      r3: ["yes", "構造的頑健性100%(循環含むランダム委任グラフ)。ただし戦略的操作への耐性はケース3が担当"],
+      r4: ["na", "全チェック計 1ms未満"],
+      r5: ["yes", "DisCoPy Pass / Quintシミュレーション Pass"]
+    }
+  ];
+
+  function chip(kind) {
+    var label = kind === "yes" ? "PASS" : kind === "no" ? "FAIL" : kind === "mixed" ? "MIXED" : "N/A";
+    return '<span class="chip ' + kind + '">' + label + "</span>";
+  }
+
+  var tbody = document.getElementById("dash-body");
+  tbody.innerHTML = dash.map(function (row) {
+    return (
+      "<tr>" +
+      '<td><div class="case-name">' + row.name + '</div><div class="case-sub">' + row.sub + "</div></td>" +
+      '<td><div class="cell">' + chip(row.r1[0]) + '<div class="cell-text">' + row.r1[1] + "</div></div></td>" +
+      '<td><div class="cell">' + chip(row.r2[0]) + '<div class="cell-text">' + row.r2[1] + "</div></div></td>" +
+      '<td><div class="cell">' + chip(row.r3[0]) + '<div class="cell-text">' + row.r3[1] + "</div></div></td>" +
+      '<td><div class="cell">' + chip(row.r4[0]) + '<div class="cell-text">' + row.r4[1] + "</div></div></td>" +
+      '<td><div class="cell">' + chip(row.r5[0]) + '<div class="cell-text">' + row.r5[1] + "</div></div></td>" +
+      "</tr>"
+    );
+  }).join("");
+
+  // ---------------- tabs ----------------
+  var tabs = document.querySelectorAll(".tab");
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      tabs.forEach(function (t) { t.classList.remove("active"); t.setAttribute("aria-selected", "false"); });
+      tab.classList.add("active");
+      tab.setAttribute("aria-selected", "true");
+      document.querySelectorAll(".view").forEach(function (v) { v.classList.remove("active"); });
+      document.getElementById("view-" + tab.dataset.view).classList.add("active");
+    });
+  });
+})();
+</script>
