@@ -72,16 +72,18 @@ POMDP、構成的アプローチへの格上げ、平均場理論、パーコレ
 
 | 責務層 | 内容 | 実装 |
 |---|---|---|
-| ストレージ層 | 痕跡の読み書き・減衰のみ | `environment.py`(共通実装、原則そのまま使う) |
-| メカニズム定義層 | 配分ルール+支払いルールを不可分な1つの仕様として定義 | `cases/<ケース名>/incentive_engine.py`(**ここだけケースごとに書く**。例: `cases/task_allocation/incentive_engine.py`) |
-| メカニズム実行層 | ストレージから読み取り、定義層のルールを計算・適用 | `aggregation.py`(共通実装。集約計算はファミリーに応じ選択: VCG系の配分決定=割当問題は`scipy`、投票系は`pref_voting`。詳細は`mechanism_catalog.md`結論の注記) |
-| 主体決定層 | 各エージェントの意思決定ロジック | `agents/`(ルールベース→LLMモック→LLM実物の順に実装) |
-| 構造検証層 | 合成則・可換性の検証 | `verification.py`(`DisCoPy`利用) |
+| ①ストレージ層 | 痕跡の読み書き・減衰のみ | `environment.py`(共通実装、原則そのまま使う) |
+| ②メカニズム定義層 | 配分ルール+支払いルールを不可分な1つの仕様として定義 | `cases/<ケース名>/incentive_engine.py`(**ここだけケースごとに書く**。例: `cases/task_allocation/incentive_engine.py`) |
+| ③メカニズム実行層 | ストレージから読み取り、定義層のルールを計算・適用 | `aggregation.py`(共通実装。集約計算はファミリーに応じ選択: VCG系の配分決定=割当問題は`scipy`、投票系は`pref_voting`。詳細は`mechanism_catalog.md`結論の注記) |
+| ④主体決定層 | 各エージェントの意思決定ロジック | `agents/`(ルールベース→LLMモック→LLM実物の順に実装) |
+| (横断)構造検証 | ①〜④の型接続(合成則・可換性)を事後的に監査する。実行パイプラインには組み込まれない | `verification.py`(`DisCoPy`利用)。4ケースを通じ、`smoke_test.py`/`generate_results_summary.py`から独立に呼ばれる形が一貫して確認された(D-21で裏付けを得て、D-28のLangGraph実地検証で「グラフのノードには含めない」ことを明示的に確認、D-40で整理を確定) |
 | (横断)アクセス制御 | 誰が何を読み書きできるか | 全層をまたぐPydanticバリデーション(プロセス内の型検証に留まる。本番実装での認証・認可の執行点は`scope_exclusions_and_deferrals.md` Part 0「壁の執行力の限界」参照) |
+
+**①〜④は実行時に1ラウンドが辿る順序を持つ「パイプライン」、⑤検証・アクセス制御は実行順序を持たない「横断的関心事」——⑤という番号は`⑤検証可能性`(10章の5大指標)等、既存の呼称としては引き続き使うが、7章のLangGraphチェックリスト「フレームワークのノード実行順序が②③⑤の役割に越境していないか」が既に示唆していたとおり、⑤はそもそも①〜④と並ぶ意味での「層」ではなく、①〜④の外側から型接続を監査する存在だと理解する(D-13/D-21/D-40)。**
 
 **①環境層の痕跡の中身(`Trace.payload`)は、②と同じA/B構造(ジェネリック型)にする**。「何でも入るdict」にしない。`process_trace: Optional[dict] = None`を型に含めておく(中身は実装しない)。
 
-**リポジトリ構成(単一リポジトリ+`cases/`、`docs/DECISIONS.md` D-23)**: `environment.py`・`aggregation.py`・`verification.py`・`schemas/`・`agents/`・`verification_kit/`(montecarlo・mdp_convergenceのみ)はリポジトリルートに置く共通実装。ケースごとの内容(`incentive_engine.py`・`deviation_test.py`・`config.yaml`・`smoke_test.py`・`generate_results_summary.py`・`demo_llm_real.py`・`quint/`・`results/`)は`cases/<ケース名>/`配下にまとめる。共通部分の修正が必要になったら、この場所(リポジトリルート)を正典として直し、`cases/`配下の全ケースの`smoke_test.py`で後方互換性を確認する。旧来の3リポジトリ構成案(`docs/repository_structure.md`)は不採用。
+**リポジトリ構成(単一リポジトリ+`cases/`、`docs/DECISIONS.md` D-23)**: `environment.py`・`aggregation.py`・`verification.py`・`schemas/`・`agents/`・`verification_kit/`(montecarlo・mdp_convergence・gambit_collusion)・`visualize/`(ケース横断の可視化)はリポジトリルートに置く共通実装。ケースごとの内容(`incentive_engine.py`・`deviation_test.py`・`config.yaml`・`smoke_test.py`・`generate_results_summary.py`・`demo_llm_real.py`等の目玉シーン・`quint/`・`results/`・`visualize/`)は`cases/<ケース名>/`配下にまとめる。共通部分の修正が必要になったら、この場所(リポジトリルート)を正典として直し、`cases/`配下の全ケースの`smoke_test.py`で後方互換性を確認する。旧来の3リポジトリ構成案(`docs/repository_structure.md`)は不採用。
 
 ---
 
