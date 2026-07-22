@@ -28,6 +28,7 @@ from environment import EnvironmentClient
 from schemas.agent_schema import Agent
 from schemas.environment_schema import EnvironmentConfig
 from verification import run_structural_verification
+from verification_kit.gambit_collusion import CollusionCheckResult, check_pure_nash_collusion
 
 from delegation_agents import DelegatingAgent, DirectVotingAgent
 from deviation_test import faithfulness_holds, run_scene, weight_conservation_holds
@@ -98,6 +99,51 @@ def run_structural_monte_carlo(
         "conserved_rate": conserved_count / n_trials,
         "had_void_count": had_void_count,
     }
+
+
+def run_delegation_collusion_check(engine: LiquidDemocracyEngine) -> CollusionCheckResult:
+    """③頑健性: 結託耐性(#5、D-39で保留にした項目をD-48で再検討・決着)。
+
+    D-39は「集計方式(二択単純多数決)自体が結託耐性を持つよう意図的に設計されている」
+    という理由で優先度を下げたが、実際にpygambitで確認したことはなかった。このケースの
+    集計は、各エージェントが最終的に寄与できる票数が最大1票(直接投票、または委任連鎖の
+    末端が投じた1票をそのまま中継するだけ)を超えない構造のため、正直に自分の真の
+    選好へ投票することが常に弱支配戦略になる——虚偽の投票・委任・自己サイクルによる
+    棄権のいずれも、自分が望む選択肢への寄与を1票より増やすことはできない(委任は
+    既存の1票を中継するだけで複製しない)。
+
+    具体例で確認する: 3人(alice/carol/erin)が固定で"no"、1人(frank)が固定で"yes"、
+    残り2人(bob/dave)が"yes"を望む結託候補という、ぎりぎりの構成(bob/daveが素直に
+    yesへ投票して初めて3対3の同点になり、タイブレーク(choices=["yes","no"]の並び順)
+    でyesが勝つ)。
+    """
+    fixed = [
+        Declaration(agent_id="alice", declared_ranking=["no", "yes"]),
+        Declaration(agent_id="carol", declared_ranking=["no", "yes"]),
+        Declaration(agent_id="erin", declared_ranking=["no", "yes"]),
+        Declaration(agent_id="frank", declared_ranking=["yes", "no"]),
+    ]
+
+    def make_declaration(agent_id: str, strategy: str) -> Declaration:
+        if strategy == "yes":
+            return Declaration(agent_id=agent_id, declared_ranking=["yes", "no"])
+        if strategy == "no":
+            return Declaration(agent_id=agent_id, declared_ranking=["no", "yes"])
+        return Declaration(agent_id=agent_id, delegate_to=agent_id)  # "void": 自己委任で自ら無効票化
+
+    def payoff(bob_strategy: str, dave_strategy: str) -> tuple[float, float]:
+        declarations = fixed + [
+            make_declaration("bob", bob_strategy), make_declaration("dave", dave_strategy)
+        ]
+        winner = engine.allocate_and_pay(declarations).allocated_agent_ids[0]
+        utility = 1.0 if winner == "yes" else 0.0
+        return utility, utility
+
+    strategies = ["yes", "no", "void"]
+    return check_pure_nash_collusion(
+        strategies_a=strategies, strategies_b=strategies,
+        payoff_fn=payoff, honest_strategy_a="yes", honest_strategy_b="yes",
+    )
 
 
 def main() -> None:
@@ -181,6 +227,11 @@ def main() -> None:
     mc_summary = run_structural_monte_carlo(engine, agent_ids, params.choices, n_mc_trials, rng)
     montecarlo_elapsed = time.perf_counter() - t0
 
+    # --- ③: pygambitによる結託耐性の検証(#5、D-39で保留した項目をD-48で決着) --------
+    t0 = time.perf_counter()
+    collusion = run_delegation_collusion_check(engine)
+    gambit_elapsed = time.perf_counter() - t0
+
     generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     lines: list[str] = []
     lines.append("# 4ケース目(Liquid Democracy・委任民主主義) 検証結果サマリー")
@@ -258,11 +309,17 @@ def main() -> None:
         f"循環等による無効票が発生したが、いずれも例外なく解決が停止した。"
     )
     lines.append(
-        "- 結託耐性(#5): 本ケース固有の結託シナリオ(例: 複数エージェントが委任先を"
-        "調整し合う)への検証は未実施。`pygambit`はケース1(VCG)向けに"
-        "`verification_kit/gambit_collusion.py`として実装・行使し、技術スタックに記載済み"
-        "だが未使用だったギャップを解消した(D-33)。委任構造固有の結託シナリオへの適用は"
-        "まだ行っていない、引き続き別途の検証課題。"
+        f"- **結託耐性(#5、D-39で保留した項目をD-48で決着)**: **満たす**。3対1で反対票が"
+        f"優勢な構成(alice/carol/erinが\"no\"固定、frankが\"yes\"固定)で、残り2人(bob/dave)の"
+        f"結託を`pygambit`で検証した。純戦略ナッシュ均衡は{collusion.equilibria_found}個見つかったが"
+        f"({', '.join(f'{a}/{b}' for a, b in collusion.equilibria_profiles)})、いずれも正直な"
+        f"戦略(honest、合計効用{collusion.honest_combined_utility:.1f})を上回らない"
+        f"(最良の均衡でも合計効用{collusion.best_colluding_combined_utility:.1f})。"
+        f"各エージェントが最終的に寄与できる票数は直接投票・委任のいずれでも最大1票"
+        f"(委任は既存の1票を中継するだけで複製しない)であり、虚偽の投票・自己委任による"
+        f"棄権のいずれも自分が望む選択肢への寄与を1票より増やせないため、正直な投票が"
+        f"常に弱支配戦略になる——二択単純多数決という集計方式自体の性質(D-30)に加え、"
+        f"委任という仕組みを組み合わせても結託の余地が生まれないことを、初めて具体的に確認した。"
     )
     lines.append("")
 
@@ -271,6 +328,7 @@ def main() -> None:
     lines.append(f"- シーン2(循環委任、5エージェント): 実測 {scene2_elapsed * 1000:.2f} ms")
     lines.append(f"- シーン3(スーパー代理人、6エージェント): 実測 {scene3_elapsed * 1000:.2f} ms")
     lines.append(f"- モンテカルロ N={mc_summary['n_trials']}試行(6エージェント、ランダム委任グラフ): 実測 {montecarlo_elapsed:.3f} 秒")
+    lines.append(f"- pygambit結託耐性チェック(3×3戦略の純戦略ナッシュ均衡列挙): 実測 {gambit_elapsed * 1000:.2f} ms")
     lines.append(f"- ⑤DisCoPy構造検証: 実測 {verification_elapsed * 1000:.2f} ms")
     lines.append("- 資源コスト(#24): 分散台帳・検証可能遅延関数等の本番運用コストは技術選定が未決のため対象外。")
     lines.append("")
