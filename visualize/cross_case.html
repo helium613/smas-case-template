@@ -137,6 +137,23 @@
   .cell-text { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
   .cell-text code { font-family: var(--font-mono); font-size: 10.5px; }
 
+  .detail-toggle {
+    font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+    color: var(--accent); background: none; border: none; padding: 2px 0; cursor: pointer;
+    text-align: left; width: fit-content;
+  }
+  .detail-toggle:hover { text-decoration: underline; }
+  .detail-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .detail-list {
+    display: none; margin: 4px 0 0; padding: 8px 10px; border-radius: 7px;
+    background: var(--panel-2); border: 1px solid var(--border); list-style: none;
+  }
+  .detail-list.open { display: block; }
+  .detail-list li { font-size: 11px; color: var(--text-muted); line-height: 1.55; padding: 3px 0; }
+  .detail-list li + li { border-top: 1px dashed var(--border); }
+  .detail-list b { color: var(--text); }
+  .detail-list code { font-family: var(--font-mono); font-size: 10px; background: var(--bg); padding: 0 4px; border-radius: 3px; }
+
   .dash-legend { display: flex; flex-wrap: wrap; gap: 14px 20px; padding: 14px 20px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
   .dash-legend .legend-item { display: flex; align-items: center; gap: 6px; }
 
@@ -343,38 +360,101 @@
   render();
 
   // ---------------- dashboard ----------------
+  // 各セルの detail 配列は、各ケースの results/summary.md の該当パラグラフを
+  // ほぼそのまま転記したもの(1行要約だけでは省かれる、実際のリーズニングを
+  // 展開できるようにする、可視化フィードバック(c))。
   var dash = [
     {
       name: "①タスク配分", sub: "VCG",
-      r1: ["yes", "個人合理性・権力集中の不在ともに成立"],
-      r2: ["na", "1回性のためMDP適用対象外"],
-      r3: ["mixed", "単独逸脱には頑健(0/1000)。結託には満たさない(pygambit, D-33)"],
-      r4: ["na", "全チェック計 1ms未満〜50ms"],
-      r5: ["yes", "DisCoPy Pass / Quintシミュレーション Pass"]
+      r1: ["yes", "個人合理性・権力集中の不在ともに成立", [
+        "個人合理性(#25): シーン1(正直申告、15件)の実現効用はすべて0以上(成立)。",
+        "権力集中の不在(#14): ⑤構造検証(全4項目)がすべてPass(壁による自領域外書き込み拒否を含む)。介入ポート(<code>EnvironmentClient.record_intervention</code>)は型定義のみで、本ケースでは未行使のため監視対象外(未検証、D-21)。"
+      ]],
+      r2: ["na", "1回性のためMDP適用対象外", [
+        "決定論性・局所-大域整合(#8): ②誘因構造エンジンは純関数(同一入力→同一出力)であり、各エージェントのローカル計算は自明に一致する。",
+        "逸脱注入からの回復力(#20): シーン3(自己拘束の確認、D-07)で反実仮想比較を実施。carolの合計効用は逸脱=-12.00 / 正直(反実仮想)=+4.00(逸脱は得にならず)。"
+      ]],
+      r3: ["mixed", "単独逸脱には頑健(0/1000)。結託には満たさない(pygambit, D-33)", [
+        "誘因整合性(#1)・耐戦略性(#2): 過大申告(alice、1.3倍)はモンテカルロN=1000試行中一度も得にならなかった。",
+        "結託耐性(#5、D-33): <b>満たさない</b>。pygambitでalice/bobの2者間の戦略形ゲームを純戦略ナッシュ均衡で解いたところ、bobが非ピボット(自分の申告額が勝敗を左右しない)なため無差別となり、結託側がより有利な均衡(合計効用5.0 &gt; honestの3.0)を外部のサイドペイメントで選べてしまう。VCGの既知の限界。",
+        "誘因整合性・耐戦略性(D-34、数値最適化): 最適化ベースエージェントが、競合の申告額に関する信念分布2通りのいずれでも、期待効用最大化の解が真の評価額(10.0)に数値的に収束することを確認した。"
+      ]],
+      r4: ["na", "全チェック計 1ms未満〜50ms", [
+        "VCGエンジン単発呼び出し: 0.01ms。3シーン構成: 0.001秒。モンテカルロN=1000試行: 0.009秒。pygambit結託チェック: 0.56ms。最適化ベースエージェント(300サンプル×2): 49ms。"
+      ]],
+      r5: ["yes", "DisCoPy Pass / Quintシミュレーション Pass", [
+        "合成則の充足(#13): 結合律・単位律を含む構造検証、4項目中4項目Pass。",
+        "Quintはquint runによるシミュレーション(500サンプル)による経験的確認に留まり、Apalache・TLCによる網羅的な形式検証ではない(環境のツールチェイン不具合、D-19)。"
+      ]]
     },
     {
       name: "②信用枠配分", sub: "トリガー戦略",
-      r1: ["yes", "個人合理性・権力集中の不在ともに成立(介入ポート行使済み)"],
-      r2: ["yes", "MDPで「常に遵守」が最適方策として収束(value=37.55)"],
-      r3: ["no", "総合結論は満たさない。素朴逸脱には頑健(0/50)だが、信用枠内の巧妙な過大申告には脆弱(50/50、D-37/38)"],
-      r4: ["na", "4シーンデモ計 6ms、モンテカルロ計 0.5秒未満"],
-      r5: ["yes", "DisCoPy Pass / Quintシミュレーション Pass"]
+      r1: ["yes", "個人合理性・権力集中の不在ともに成立(介入ポート行使済み)", [
+        "個人合理性(#25): 支払いが発生しないメカニズムのため、実現効用は構造的に常に0以上。",
+        "権力集中の不在(#14): ⑤構造検証(全4項目)がすべてPass。介入ポート: Pass — <code>VersionedMechanism.with_intervention</code>を実行し、punishment_rounds=10→5への改定をInterventionRecordとして記録。ケース1では未行使だったギャップをここで解消(D-21/D-22)。"
+      ]],
+      r2: ["yes", "MDPで「常に遵守」が最適方策として収束(value=37.55)", [
+        "時間発展・繰り返しゲームでの安定性(#7): 制裁期間10ラウンド、割引率0.9のもとで、通常状態での最適行動は「honest」(value=37.55、12回で収束)。ケース1では適用対象外だったMDPがここで初めて本来の役割を果たす。",
+        "本チェックの範囲(重要、D-25): pymdptoolboxはシングルエージェント用のMDPソルバーであり、これは「一撃逸脱原理」への還元。単独逸脱の非収益性のみを確認し、複数エージェントの結託や他の均衡の存在までは検証していない。"
+      ]],
+      r3: ["no", "総合結論は満たさない。素朴逸脱には頑健(0/50)だが、信用枠内の巧妙な過大申告には脆弱(50/50、D-37/38)", [
+        "誘因整合性・耐戦略性(総合結論、D-37/D-38): <b>満たさない</b>。「遵守」(信用枠以内)と「正直」(真の評価額どおり)は本メカニズムでは同値でない。敵対的LLMが発見した「信用枠のすぐ下を狙う恒常的な過大申告」戦略は一切検出されない。信用枠は真の評価額と無関係に過去の遵守実績のみから育つため、この限界は原理的なもの。",
+        "素朴な逸脱への頑健性(参考): carolの割引後合計効用は逸脱=+37.73 / 遵守=+53.00。GreedyOverstatingAgent(固定高値、即座に検出される)には頑健。",
+        "信用枠内の恒常的過大申告への頑健性: N=50試行(30ラウンド、真の評価額をランダム化)で50件(100%)がhonestを上回った。",
+        "結託耐性(#5、D-39): 意味のある結託シナリオが無いと判断し未実装。<code>compute_credit_limit</code>は勝敗ではなく遵守実績のみで信用枠を育てるため、「誰が勝つかを裏で調整する」結託は無効。"
+      ]],
+      r4: ["na", "4シーンデモ計 6ms、モンテカルロ計 0.5秒未満", [
+        "4シーンデモ(実際+反実仮想、計76ラウンド): 6ms。モンテカルロN=50試行: 0.29秒。信用枠内過大申告のモンテカルロN=50試行(30ラウンド): 0.19秒。MDP: 0.5ms。"
+      ]],
+      r5: ["yes", "DisCoPy Pass / Quintシミュレーション Pass", [
+        "合成則の充足(#13): 4項目中4項目Pass。",
+        "関手による対応づけ(#15): ケース1からの型対応づけを確認。Declaration/AllocationResult等はケース1と同じ型をそのまま満たし、A側の書き換えなしで新規ケースを収容できた。"
+      ]]
     },
     {
       name: "③投票", sub: "ボルダ得点",
-      r1: ["yes", "個人合理性・権力集中の不在ともに成立(LangGraph実地検証済み)"],
-      r2: ["na", "1回性のためMDP適用対象外"],
-      r3: ["no", "満たさない(意図的)。埋葬戦術8.0%成功、結託ではさらに強い均衡が発生(D-39)"],
-      r4: ["na", "全チェック計 4ms〜4秒(2シーン構成込み)"],
-      r5: ["yes", "DisCoPy Pass / Quintシミュレーション Pass"]
+      r1: ["yes", "個人合理性・権力集中の不在ともに成立(LangGraph実地検証済み)", [
+        "個人合理性(#25): 支払いが発生せず真の評価額も非負のため、シーン1の実現効用はすべて0以上。",
+        "権力集中の不在(#14): 構造検証4/4 Pass。フレームワーク統合(LangGraph): State型は<code>EnvironmentClient</code>参照のみを持ち、ノード実行順序どおりに動作、壁も迂回されない。D-21/D-22から持ち越されたギャップをここで解消。"
+      ]],
+      r2: ["na", "1回性のためMDP適用対象外", [
+        "決定論性・局所-大域整合(#8): ②誘因構造エンジンは純関数であり、各エージェントのローカル計算は自明に一致する。",
+        "収束性そのもの(#17): 代替評価として③頑健性(モンテカルロ)を参照。"
+      ]],
+      r3: ["no", "満たさない(意図的)。埋葬戦術8.0%成功、結託ではさらに強い均衡が発生(D-39)", [
+        "誘因整合性・耐戦略性(#1・#2): <b>満たさない(意図的)</b>。具体例(bob、埋葬戦術)で合計効用+50.00(正直+30.00)と明確に得をした。モンテカルロでも8.0%の試行で埋葬戦術が得になった。ボルダ得点はカタログに「戦術的な順位操作が可能」と明記された非耐戦略性メカニズムであり、これは意図した実証結果(D-27)。",
+        "結託耐性(#5、D-39): <b>満たさない</b>。D-29(3候補では単独の埋葬戦術は同点止まり)を踏まえ、2人の結託なら3候補でもクリーンな逆転を起こせるか検証。bob単独の埋葬は同点止まり(honest=Aがタイブレークで勝つ)だが、bob+daveが結託して2人とも埋葬すると、honest(合計効用12.0)を上回る新しい均衡(合計効用20.0)が生まれる。サイドペイメント無しでも双方に厳密に有利な強い均衡。"
+      ]],
+      r4: ["na", "全チェック計 4ms〜4秒(2シーン構成込み)", [
+        "ボルダ集計単発呼び出し: 0.15ms。2シーン構成(scene1×5, scene2×5): 3.6秒。モンテカルロN=200試行: 0.022秒。pygambit結託チェック: 0.72ms。"
+      ]],
+      r5: ["yes", "DisCoPy Pass / Quintシミュレーション Pass", [
+        "合成則の充足(#13): 4項目中4項目Pass。",
+        "関手による対応づけ(#15): ケース1・2からの型対応づけを確認。Declaration/ActionOutputにdeclared_ranking(順位申告)を後方互換で追加(3ケース目にして初めての必然性ある拡張、ケース2はA側変更ゼロだった)。"
+      ]]
     },
     {
       name: "④Liquid Democracy", sub: "委任連鎖",
-      r1: ["yes", "個人合理性は成立。権力集中は「自発的委任は#14の懸念と別物」と定義を再整理"],
-      r2: ["na", "1回性のためMDP適用対象外。ただし委任の忠実性(#19)を初検証、合致"],
-      r3: ["yes", "構造的頑健性100%(循環含むランダム委任グラフ)。ただし戦略的操作への耐性はケース3が担当"],
-      r4: ["na", "全チェック計 1ms未満"],
-      r5: ["yes", "DisCoPy Pass / Quintシミュレーション Pass"]
+      r1: ["yes", "個人合理性は成立。権力集中は「自発的委任は#14の懸念と別物」と定義を再整理", [
+        "個人合理性(#25): 支払いが発生しないメカニズムのため、実現効用は構造的に常に0以上。",
+        "権力集中の不在(#14、定義の再検討): シーン3(スーパー代理人)でpriyaに4人が委任し、重みが5に集約された。ただしこれは各委任者が自発的に選んだ結果であり、公開痕跡により誰でも監査可能、かつ次ラウンドで委任先を自由に変更できる。「1主体が他者の運命を一方的に決める」という#14本来の懸念(同意なき権力集中)とは性質が異なる。"
+      ]],
+      r2: ["na", "1回性のためMDP適用対象外。ただし委任の忠実性(#19)を初検証、合致", [
+        "委任連鎖を通した誘因構造の伝播の妥当性(#19、初検証): シーン1で、全員が忠実に委任した場合の集計結果と、委任なしで各人が直接投票した場合(反実仮想)の集計結果を比較し、一致することを確認した。委任を経由しても各人の真の選好の反映が劣化しないことの、最も文字通りの実証。",
+        "決定論性・局所-大域整合(#8): 重みの保存則(有効票+無効票の合計=参加者数)がシーン1・シーン2のいずれでも成立。"
+      ]],
+      r3: ["yes", "構造的頑健性100%(循環含むランダム委任グラフ)。ただし戦略的操作への耐性はケース3が担当", [
+        "このケースの③頑健性は、ケース3(戦略的操作の成功率)とは異なる軸を測る: 集計方式(二択単純多数決)自体は耐戦略性を満たす設計のため、ここでは「委任構造がランダム・敵対的な配線に対して構造的に頑健か」を測る。",
+        "本チェックの限界(D-31): 「重みの保存則100%」は実装の構造上ほぼ自明に成立する指標であり、真に非自明な主張は「循環・深さ上限があっても例外や無限ループが起きない」こと。実装当初、実在しない委任先が紛れ込み保存則が壊れる実バグがあったが修正済み。",
+        "結託耐性(#5): 本ケース固有の結託シナリオへの検証は未実施。pygambitはケース1向けに実装・行使済みだが、委任構造固有の結託シナリオへの適用はまだ、引き続き別途の検証課題。"
+      ]],
+      r4: ["na", "全チェック計 1ms未満", [
+        "シーン1〜3(5〜6エージェント): それぞれ1ms未満。モンテカルロN=500試行: 0.007秒。⑤DisCoPy構造検証: 0.62ms。"
+      ]],
+      r5: ["yes", "DisCoPy Pass / Quintシミュレーション Pass", [
+        "合成則の充足(#13): 4項目中4項目Pass。",
+        "関手による対応づけ(#15): ケース1〜3からの型対応づけを確認。Declaration/ActionOutputにdelegate_to(委任先)を追加。ケース3のdeclared_rankingに続き2ケース連続のA側拡張であり、CLAUDE.md 11章の「頻度が増えたら危険信号」チェックの対象として明示的に記録(D-30)。"
+      ]]
     }
   ];
 
@@ -383,19 +463,43 @@
     return '<span class="chip ' + kind + '">' + label + "</span>";
   }
 
+  var detailIdCounter = 0;
+  function cellHtml(entry) {
+    var kind = entry[0], shortText = entry[1], detail = entry[2];
+    var id = "detail-" + (detailIdCounter++);
+    var detailHtml = detail.map(function (d) { return "<li>" + d + "</li>"; }).join("");
+    return (
+      '<div class="cell">' +
+      chip(kind) +
+      '<div class="cell-text">' + shortText + "</div>" +
+      '<button class="detail-toggle" data-target="' + id + '" aria-expanded="false">▸ 詳細</button>' +
+      '<ul class="detail-list" id="' + id + '">' + detailHtml + "</ul>" +
+      "</div>"
+    );
+  }
+
   var tbody = document.getElementById("dash-body");
   tbody.innerHTML = dash.map(function (row) {
     return (
       "<tr>" +
       '<td><div class="case-name">' + row.name + '</div><div class="case-sub">' + row.sub + "</div></td>" +
-      '<td><div class="cell">' + chip(row.r1[0]) + '<div class="cell-text">' + row.r1[1] + "</div></div></td>" +
-      '<td><div class="cell">' + chip(row.r2[0]) + '<div class="cell-text">' + row.r2[1] + "</div></div></td>" +
-      '<td><div class="cell">' + chip(row.r3[0]) + '<div class="cell-text">' + row.r3[1] + "</div></div></td>" +
-      '<td><div class="cell">' + chip(row.r4[0]) + '<div class="cell-text">' + row.r4[1] + "</div></div></td>" +
-      '<td><div class="cell">' + chip(row.r5[0]) + '<div class="cell-text">' + row.r5[1] + "</div></div></td>" +
+      '<td>' + cellHtml(row.r1) + "</td>" +
+      '<td>' + cellHtml(row.r2) + "</td>" +
+      '<td>' + cellHtml(row.r3) + "</td>" +
+      '<td>' + cellHtml(row.r4) + "</td>" +
+      '<td>' + cellHtml(row.r5) + "</td>" +
       "</tr>"
     );
   }).join("");
+
+  tbody.querySelectorAll(".detail-toggle").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var target = document.getElementById(btn.dataset.target);
+      var open = target.classList.toggle("open");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      btn.textContent = (open ? "▾ 閉じる" : "▸ 詳細");
+    });
+  });
 
   // ---------------- agent-centric view ----------------
   var agentRows = [
