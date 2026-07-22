@@ -164,6 +164,7 @@
   <div class="tabs" role="tablist">
     <button class="tab active" data-view="pipeline" role="tab" aria-selected="true">① アーキテクチャ(共通骨格)</button>
     <button class="tab" data-view="dashboard" role="tab" aria-selected="false">② 5大指標ダッシュボード</button>
+    <button class="tab" data-view="agents" role="tab" aria-selected="false">③ 実行主体層別ダッシュボード</button>
   </div>
 
   <!-- ================= Pipeline view ================= -->
@@ -214,6 +215,39 @@
         同じ列に並んでいても同じ物差しではないため、チップだけでなく右の説明文まで読む必要がある。
       </div>
       <div class="source">出典: 各ケースの <code>results/summary.md</code>(2026-07-22 生成分)。数値は捏造せず転記。</div>
+    </div>
+  </div>
+
+  <!-- ================= Agent-centric view ================= -->
+  <div class="view" id="view-agents">
+    <div class="panel">
+      <div style="overflow-x:auto;">
+        <table class="dash-table">
+          <thead>
+            <tr>
+              <th>実行主体層の実装</th>
+              <th>①タスク配分</th>
+              <th>②信用枠配分</th>
+              <th>③投票</th>
+              <th>④Liquid Democracy</th>
+              <th>役割・発見</th>
+            </tr>
+          </thead>
+          <tbody id="agents-body"></tbody>
+        </table>
+      </div>
+      <div class="dash-legend">
+        <span class="legend-item"><span class="chip yes">検証済</span>このケースで実際に使用・確認済み</span>
+        <span class="legend-item"><span class="chip na">—</span>未着手(このケースでは使われていない)</span>
+      </div>
+      <div class="dash-note">
+        <b>この表が示すこと</b>: 評価観点#11(プラガブル性)は「ケース×指標」の表では見えない、
+        もう1つの軸——<b>ルールベースは全4ケースで確認済みだが、LLMモック・LLM実物・最適化ベース・
+        敵対的LLMは、それぞれ<u>ただ1つのケースでしか実際に試されていない</u></b>。「型としては
+        差し替え可能」という主張と、「実際に4ケース全部で動かして確認した」という主張は別物であり、
+        この表は後者がまだ部分的にしか達成されていないことを正直に示す。
+      </div>
+      <div class="source">出典: 各ケースの <code>smoke_test.py</code>・<code>generate_results_summary.py</code>・<code>demo_llm_*.py</code> の実際のimport文を確認。</div>
     </div>
   </div>
 </div>
@@ -359,6 +393,58 @@
       '<td><div class="cell">' + chip(row.r3[0]) + '<div class="cell-text">' + row.r3[1] + "</div></div></td>" +
       '<td><div class="cell">' + chip(row.r4[0]) + '<div class="cell-text">' + row.r4[1] + "</div></div></td>" +
       '<td><div class="cell">' + chip(row.r5[0]) + '<div class="cell-text">' + row.r5[1] + "</div></div></td>" +
+      "</tr>"
+    );
+  }).join("");
+
+  // ---------------- agent-centric view ----------------
+  var agentRows = [
+    {
+      name: "ルールベース(正直)", sub: "HonestRuleBasedAgent 等",
+      c1: "yes", c2: "yes", c3: "yes", c4: "yes",
+      note: "全ケース共通の基準点。申告の「形」(数値→順位→委任先)が変わってもAgentプロトコル自体は無変更(#11)。"
+    },
+    {
+      name: "ルールベース(逸脱)", sub: "Overstating / Greedy / CreditLimitMaximizing / 埋葬戦術",
+      c1: "yes", c2: "yes", c3: "yes", c4: "na",
+      note: "GreedyOverstatingAgentはケース1→2で無改造のまま再利用(#11の実例)。ケース4は循環委任の配線で代用、専用クラスは無し。"
+    },
+    {
+      name: "LLMモック", sub: "ProbabilisticMockAgent",
+      c1: "yes", c2: "na", c3: "na", c4: "na",
+      note: "モンテカルロ用の確率的エージェント。ケース1のみで使用、他ケースへの展開はまだ行っていない。"
+    },
+    {
+      name: "LLM実物", sub: "AnthropicToolUseAgent",
+      c1: "yes", c2: "na", c3: "na", c4: "na",
+      note: "正直な基準動作を実際のAPI呼び出しで確認(D-18・D-36)。他ケースでは未検証。"
+    },
+    {
+      name: "最適化ベース", sub: "OptimizingBidderAgent",
+      c1: "yes", c2: "na", c3: "na", c4: "na",
+      note: "信念分布の形状によらず、期待効用を最大化する申告額が真の評価額に収束することを数値的に確認(D-34)。他ケースでは未検証。"
+    },
+    {
+      name: "敵対的LLM", sub: "AdversarialToolUseAgent",
+      c1: "na", c2: "yes", c3: "na", c4: "na",
+      note: "「信用枠内に留まる恒常的な過大申告」という検出ルールの穴を発見(D-37)。ケース2でのみ実施——ケース1にはそもそも検出ルールが無いため対象外。"
+    }
+  ];
+
+  function agentChip(kind) {
+    return kind === "yes" ? '<span class="chip yes">検証済</span>' : '<span class="chip na">—</span>';
+  }
+
+  var agentsBody = document.getElementById("agents-body");
+  agentsBody.innerHTML = agentRows.map(function (row) {
+    return (
+      "<tr>" +
+      '<td><div class="case-name">' + row.name + '</div><div class="case-sub">' + row.sub + "</div></td>" +
+      '<td>' + agentChip(row.c1) + "</td>" +
+      '<td>' + agentChip(row.c2) + "</td>" +
+      '<td>' + agentChip(row.c3) + "</td>" +
+      '<td>' + agentChip(row.c4) + "</td>" +
+      '<td><div class="cell-text" style="min-width:220px;">' + row.note + "</div></td>" +
       "</tr>"
     );
   }).join("");
