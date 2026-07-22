@@ -441,7 +441,7 @@ def main() -> None:
                  f"実測 {optimizer_montecarlo_elapsed:.3f} 秒")
     lines.append(f"- MDP(value iteration、状態数{params.punishment_rounds + 1}): 実測 {mdp_elapsed * 1000:.2f} ms")
     lines.append(f"- ⑤DisCoPy構造検証: 実測 {verification_elapsed * 1000:.2f} ms")
-    lines.append("- 資源コスト(#25、旧#24): 分散台帳・検証可能遅延関数等の本番運用コストは技術選定が未決のため対象外。")
+    lines.append("- 資源コスト(#24): 分散台帳・検証可能遅延関数等の本番運用コストは技術選定が未決のため対象外。")
     lines.append("")
 
     disco_py_pass = "Pass" if verification_report.all_passed else "Fail"
