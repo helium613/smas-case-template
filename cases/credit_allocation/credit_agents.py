@@ -44,3 +44,22 @@ class CreditAwareHonestAgent:
         credit_limit = observation.trace_summary.get("credit_limit")
         declared_value = true_value if credit_limit is None else min(true_value, credit_limit)
         return ActionOutput(action="bid", declared_value=declared_value, reasoning=None)
+
+
+class CreditLimitMaximizingAgent:
+    """信用枠のすぐ下を狙って恒常的に申告する固定ルール(D-37のRed Team LLMが発見した
+    戦略を、決定論的なルールベースとして再現したもの)。真の評価額を一切参照せず、
+    常に自分の信用枠(observation.trace_summary["credit_limit"])をそのまま申告する。
+
+    信用枠は真の評価額と無関係に過去の遵守実績のみから育つため、この戦略は
+    「遵守」(信用枠以内)でありながら恒常的な過大申告になりうる——TriggerStrategyEngine
+    は信用枠以内かどうかしかチェックしないため、一度も検出されない(D-37)。
+    """
+
+    def __init__(self, agent_id: str) -> None:
+        self.agent_id = agent_id
+
+    def decide(self, observation: ObservationInput) -> ActionOutput:
+        credit_limit = observation.trace_summary.get("credit_limit")
+        declared_value = credit_limit if credit_limit is not None else 0.0
+        return ActionOutput(action="bid", declared_value=declared_value, reasoning=None)

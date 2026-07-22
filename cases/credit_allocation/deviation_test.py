@@ -218,3 +218,76 @@ def run_four_scene_demo(
         comparison.counterfactual_utility += (discount ** t) * (true_value if won else 0.0)
 
     return actual_results, comparison
+
+
+@dataclass
+class SustainedStrategyComparison:
+    """D-37の発見(信用枠内に留まる恒常的な過大申告は一度も検出されない)の頑健性
+    チェック用。4シーン構成(build→deviate→punish→recover)とは異なり、この戦略は
+    「遵守」判定を一度も破らないため制裁が発動せず、シーン分割そのものが不要になる
+    ——全ラウンドを同一の戦略で押し通した場合の割引後合計効用を、honestのまま
+    貫いた場合(反実仮想)と比較するだけでよい。
+    """
+
+    agent_id: str
+    discount: float
+    strategy_utility: float = 0.0
+    honest_utility: float = 0.0
+
+    @property
+    def strategy_profitable(self) -> bool:
+        return self.strategy_utility > self.honest_utility
+
+
+def run_sustained_strategy_comparison(
+    agent_ids: list[str],
+    strategy_agent_id: str,
+    strategy_agent_factory,
+    engine: TriggerStrategyEngine,
+    env_factory,
+    *,
+    n_rounds: int,
+    discount: float,
+    high_value: float = 15.0,
+    low_value: float = 8.0,
+) -> SustainedStrategyComparison:
+    """strategy_agent_idだけを指定した戦略(strategy_agent_factory(agent_id)で生成)
+    に差し替えたまま全ラウンドを実行した場合と、honestのまま貫いた場合(反実仮想、
+    別のEnvironmentClientで独立実行)を、それぞれn_rounds回実行して比較する。
+    """
+
+    def make_honest_agents() -> list[Agent]:
+        return [
+            CreditAwareHonestAgent(a, i, n_agents=len(agent_ids), high_value=high_value, low_value=low_value)
+            for i, a in enumerate(agent_ids)
+        ]
+
+    true_value_schedule = CreditAwareHonestAgent(
+        strategy_agent_id,
+        agent_ids.index(strategy_agent_id),
+        n_agents=len(agent_ids),
+        high_value=high_value, low_value=low_value,
+    )
+
+    strategy_env = env_factory()
+    strategy_agents = [
+        strategy_agent_factory(agent_id) if agent_id == strategy_agent_id else agent
+        for agent_id, agent in zip(agent_ids, make_honest_agents())
+    ]
+    strategy_results = [run_round("sustained_strategy", strategy_agents, engine, strategy_env) for _ in range(n_rounds)]
+
+    honest_env = env_factory()
+    honest_agents = make_honest_agents()
+    honest_results = [run_round("sustained_honest", honest_agents, engine, honest_env) for _ in range(n_rounds)]
+
+    comparison = SustainedStrategyComparison(agent_id=strategy_agent_id, discount=discount)
+    for t, round_result in enumerate(strategy_results):
+        won = round_result.outcome is not None and strategy_agent_id in round_result.outcome.allocated_agent_ids
+        true_value = true_value_schedule.true_value_for_round(round_result.round_id)
+        comparison.strategy_utility += (discount ** t) * (true_value if won else 0.0)
+    for t, round_result in enumerate(honest_results):
+        won = round_result.outcome is not None and strategy_agent_id in round_result.outcome.allocated_agent_ids
+        true_value = true_value_schedule.true_value_for_round(round_result.round_id)
+        comparison.honest_utility += (discount ** t) * (true_value if won else 0.0)
+
+    return comparison
