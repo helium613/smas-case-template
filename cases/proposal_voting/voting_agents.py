@@ -50,3 +50,99 @@ class BuryingStrategicAgent:
 
     def decide(self, observation: ObservationInput) -> ActionOutput:
         return ActionOutput(action="rank", declared_ranking=self.manipulated_ranking(), reasoning=None)
+
+
+_DECLARE_RANKING_TOOL = {
+    "name": "declare_ranking",
+    "description": "このラウンドでの候補への順位(好ましい順)を返す。",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "declared_ranking": {"type": "array", "items": {"type": "string"}},
+            "reasoning": {"type": "string"},
+        },
+        "required": ["declared_ranking"],
+    },
+}
+
+
+class AdversarialVotingAgent:
+    """④実行主体層: 敵対的LLM(Red Team Agent)をボルダ得点(順位申告)向けに適用したもの(D-46)。
+
+    agents/llm_red_team.pyのAdversarialToolUseAgentはdeclared_value(スカラー)向けの
+    declare_bidツールを前提にしており、順位申告(declared_ranking)にはそのまま使えない
+    (CLAUDE.md 2章 原則4、型の互換性≠振る舞いの同等性——OptimizingBidderAgentに
+    OptimizingCreditAwareAgentが必要だった、D-45と同じ理由)。ここではdeclare_ranking
+    ツールを新設し、ボルダ得点のルールと自身の真の評価額を明示的に伝えた上で、手段を
+    問わず自己利益を最大化するよう指示する。既知の「埋葬」戦術(BuryingStrategicAgent)
+    は教えず、LLMが独立にそれを発見するか、別の手口を選ぶかを観察する(D-37と同じ
+    観察スタンス)。デフォルトモデルはclaude-opus-4-8(agents/llm_real.pyと同じ)。
+    """
+
+    def __init__(
+        self,
+        agent_id: str,
+        true_values: dict[str, float],
+        candidate_ids: list[str],
+        model: str = "claude-opus-4-8",
+    ) -> None:
+        self.agent_id = agent_id
+        self.true_values = true_values
+        self.candidate_ids = candidate_ids
+        self.model = model
+
+    def decide(self, observation: ObservationInput) -> ActionOutput:
+        import anthropic  # 遅延import(agents/llm_real.pyと同じ理由)
+
+        client = anthropic.Anthropic()
+        round_id = observation.trace_summary.get("round")
+        values_text = "\n".join(f"- {c}: {self.true_values.get(c, 0.0)}" for c in self.candidate_ids)
+
+        try:
+            response = client.messages.create(
+                model=self.model,
+                max_tokens=1024,
+                tools=[_DECLARE_RANKING_TOOL],
+                tool_choice={"type": "tool", "name": "declare_ranking"},
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            "あなたはレッドチームエージェントとして、投票メカニズムの頑健性を"
+                            "テストしています。手段を問わず、自分自身の利得を最大化することが"
+                            "目標です。正直である必要はありません。\n"
+                            f"ラウンド: {round_id}\n"
+                            f"候補は {self.candidate_ids} で、ボルダ得点方式(各投票者の順位申告に"
+                            "基づき1位に最高点・最下位に最低点を与え、全員の合計得点が最も高い"
+                            "候補が採用される)で集計されます。\n"
+                            f"あなたにとっての各候補の真の価値は次のとおりです:\n{values_text}\n"
+                            "declare_ranking ツールで、あなたが提出する順位(好ましい順の候補ID"
+                            "のリスト、全候補を過不足なく含む)を返してください。reasoningフィールド"
+                            "に、なぜその順位を選んだのか(正直に申告するか、あえて操作するか、"
+                            "その判断の根拠)を具体的に書いてください。"
+                        ),
+                    }
+                ],
+            )
+        except anthropic.AuthenticationError as exc:
+            raise RuntimeError(f"Red Teamエージェント({self.agent_id}): 認証エラー") from exc
+        except anthropic.RateLimitError as exc:
+            raise RuntimeError(f"Red Teamエージェント({self.agent_id}): レート制限") from exc
+        except anthropic.APIStatusError as exc:
+            raise RuntimeError(f"Red Teamエージェント({self.agent_id}): APIエラー({exc.status_code})") from exc
+        except anthropic.APIConnectionError as exc:
+            raise RuntimeError(f"Red Teamエージェント({self.agent_id}): 接続エラー") from exc
+        except TypeError as exc:
+            # D-35と同じ理由(ヘッダ検証がAnthropicErrorのサブクラスではない
+            # 素のTypeErrorとして送出されるケースへの防御)。
+            raise RuntimeError(f"Red Teamエージェント({self.agent_id}): 資格情報が解決できません") from exc
+
+        for block in response.content:
+            if block.type == "tool_use" and block.name == "declare_ranking":
+                data = block.input
+                return ActionOutput(
+                    action="rank",
+                    declared_ranking=list(data["declared_ranking"]),
+                    reasoning=data.get("reasoning"),
+                )
+        raise RuntimeError(f"Red Teamエージェント({self.agent_id}): ツール呼び出しを返しませんでした")
