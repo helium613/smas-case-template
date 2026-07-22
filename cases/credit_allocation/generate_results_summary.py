@@ -26,12 +26,12 @@ sys.path.insert(0, str(_CASE_DIR))
 
 from agents.rule_based import GreedyOverstatingAgent
 from environment import EnvironmentClient
-from schemas.agent_schema import Agent
+from schemas.agent_schema import Agent, ObservationInput
 from schemas.environment_schema import EnvironmentConfig
 from schemas.incentive_schema import VersionedMechanism
 from verification import run_structural_verification
 
-from credit_agents import CreditAwareHonestAgent, CreditLimitMaximizingAgent
+from credit_agents import CreditAwareHonestAgent, CreditLimitMaximizingAgent, OptimizingCreditAwareAgent
 from deviation_test import run_four_scene_demo, run_sustained_strategy_comparison
 from incentive_engine import TriggerStrategyEngine, TriggerStrategyParameters
 from mdp_model import check_honesty_converges
@@ -167,6 +167,50 @@ def run_credit_limit_maximizing_monte_carlo(
     return {"n_trials": n_trials, "profitable_count": profitable_count, "profitable_rate": profitable_count / n_trials}
 
 
+def run_optimization_based_monte_carlo(
+    engine_params: TriggerStrategyParameters,
+    env_config: EnvironmentConfig,
+    n_rounds: int,
+    n_trials: int,
+    rng: random.Random,
+) -> dict:
+    """③頑健性: D-37/D-38(信用枠内に留まる恒常的な過大申告)を、ルールベース
+    (CreditLimitMaximizingAgent)とは独立の手段——期待効用の数値最適化(D-34の
+    考え方をこのケースに適用、D-45)——で追試する。競合(alice/bob)の申告額の
+    分布はmax_limitまでの一様分布と仮定し、信用枠を上限とする範囲でscipy.optimize
+    により期待効用(勝率×真の評価額)を最大化した申告を、全ラウンドで貫く。
+    """
+    profitable_count = 0
+    agent_ids = ["alice", "bob", "carol"]
+    engine = TriggerStrategyEngine(engine_params)
+
+    def make_env() -> EnvironmentClient:
+        return EnvironmentClient(env_config)
+
+    def competitor_sampler(r: random.Random) -> float:
+        return r.uniform(0.0, engine_params.max_limit)
+
+    for _ in range(n_trials):
+        high_value = rng.uniform(12.0, 20.0)
+        low_value = rng.uniform(4.0, 10.0)
+
+        def make_optimizing_agent(agent_id: str, _high=high_value, _low=low_value):
+            return OptimizingCreditAwareAgent(
+                agent_id, agent_index=agent_ids.index(agent_id), n_agents=len(agent_ids),
+                competitor_bid_sampler=competitor_sampler, engine=engine,
+                high_value=_high, low_value=_low, n_samples=50, rng=random.Random(0),
+            )
+
+        comparison = run_sustained_strategy_comparison(
+            agent_ids, "carol", make_optimizing_agent,
+            engine, make_env, n_rounds=n_rounds, discount=0.9,
+            high_value=high_value, low_value=low_value,
+        )
+        if comparison.strategy_profitable:
+            profitable_count += 1
+    return {"n_trials": n_trials, "profitable_count": profitable_count, "profitable_rate": profitable_count / n_trials}
+
+
 def main() -> None:
     with open(_CASE_DIR / "config.yaml", encoding="utf-8") as f:
         config = yaml.safe_load(f)
@@ -232,6 +276,34 @@ def main() -> None:
         params, env_config, n_rounds=30, n_trials=n_credit_limit_trials, rng=rng_credit_limit
     )
     credit_limit_montecarlo_elapsed = time.perf_counter() - t0
+
+    # --- ③: 最適化ベースエージェント(D-34の考え方をこのケースに適用、D-45) -----------
+    t0 = time.perf_counter()
+    optimizer_convergence: dict[str, float] = {}
+    reference_credit_limit = 17.77  # D-37のRed Teamフェーズで実際に観測されたcarolの信用枠(参考値)
+    optimizer_engine = TriggerStrategyEngine(params)
+    for label, sampler in [
+        ("一様分布[5,20]", lambda r: r.uniform(5.0, 20.0)),
+        ("一様分布[10,30]", lambda r: r.uniform(10.0, 30.0)),
+    ]:
+        optimizer_agent = OptimizingCreditAwareAgent(
+            "carol", agent_index=2, n_agents=3,
+            competitor_bid_sampler=sampler, engine=optimizer_engine,
+            high_value=15.0, low_value=15.0, n_samples=300, rng=random.Random(0),
+        )
+        action = optimizer_agent.decide(
+            ObservationInput(trace_summary={"round": 0, "credit_limit": reference_credit_limit})
+        )
+        optimizer_convergence[label] = action.declared_value
+    optimizer_convergence_elapsed = time.perf_counter() - t0
+
+    rng_optimizer = random.Random(0)
+    n_optimizer_trials = min(config["verification_kit"]["monte_carlo_trials"], 50)
+    t0 = time.perf_counter()
+    optimizer_mc_summary = run_optimization_based_monte_carlo(
+        params, env_config, n_rounds=30, n_trials=n_optimizer_trials, rng=rng_optimizer
+    )
+    optimizer_montecarlo_elapsed = time.perf_counter() - t0
 
     generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     lines: list[str] = []
@@ -319,6 +391,21 @@ def main() -> None:
         f"({credit_limit_mc_summary['profitable_rate']:.1%})でこの戦略がhonestを上回った。"
     )
     lines.append(
+        f"- 最適化ベースエージェントによる独立の追試(D-45): ルールベース"
+        f"(`CreditLimitMaximizingAgent`)・敵対的LLM(D-37)とは独立の手段——競合の"
+        f"申告額に関する信念分布のもとで期待効用(勝率×真の評価額)を"
+        f"scipy.optimize.minimize_scalarで数値最大化する`OptimizingCreditAwareAgent`——でも"
+        f"同じ結論を確認した。信念分布が信用枠付近まで広がる場合"
+        f"({', '.join(f'{label}: 申告={value:.2f}(信用枠{reference_credit_limit:.2f}との誤差{abs(value - reference_credit_limit):.2f})' for label, value in optimizer_convergence.items())})、"
+        f"探索は信用枠の境界に収束する。この方針を全ラウンドで貫いたモンテカルロ"
+        f"(N={optimizer_mc_summary['n_trials']}試行)でも{optimizer_mc_summary['profitable_count']}件"
+        f"({optimizer_mc_summary['profitable_rate']:.1%})でhonestを上回り、D-37/D-38と"
+        f"同水準の結果を、感情や指示文に依存しない数値最適化から独立に得た。"
+        f"ただし信念分布の支持が信用枠より十分低い場合は、勝率が既に1に近い時点で"
+        f"期待効用が頭打ちになり、境界ちょうどへの収束は保証されない"
+        f"(探索範囲を信用枠以内に限定しているため、この場合でも信用枠を超えることはない)。"
+    )
+    lines.append(
         "- 単一ラウンドの申告ルールだけを見ると耐戦略性を満たさない(支払いが無く、"
         "最高申告額が常に勝つため)。正直申告(信用枠の遵守)が均衡になるのは、"
         "繰り返しによる将来の信用喪失という脅しがあってこそである、という設計の性質上、"
@@ -348,6 +435,10 @@ def main() -> None:
                  f"実測 {montecarlo_elapsed:.3f} 秒")
     lines.append(f"- モンテカルロ(D-37の発見、信用枠内の恒常的過大申告) N={credit_limit_mc_summary['n_trials']}試行"
                  f"(30ラウンド×{credit_limit_mc_summary['n_trials']}): 実測 {credit_limit_montecarlo_elapsed:.3f} 秒")
+    lines.append(f"- 最適化ベースエージェント(D-45): 収束確認(信念分布2通り) 実測 "
+                 f"{optimizer_convergence_elapsed * 1000:.1f} ms、モンテカルロ N="
+                 f"{optimizer_mc_summary['n_trials']}試行(30ラウンド×{optimizer_mc_summary['n_trials']}): "
+                 f"実測 {optimizer_montecarlo_elapsed:.3f} 秒")
     lines.append(f"- MDP(value iteration、状態数{params.punishment_rounds + 1}): 実測 {mdp_elapsed * 1000:.2f} ms")
     lines.append(f"- ⑤DisCoPy構造検証: 実測 {verification_elapsed * 1000:.2f} ms")
     lines.append("- 資源コスト(#25、旧#24): 分散台帳・検証可能遅延関数等の本番運用コストは技術選定が未決のため対象外。")
@@ -381,6 +472,13 @@ def main() -> None:
         f"無改造で再利用できた。ケース間で同一のAgentプロトコルを満たしたまま、全く異なる"
         f"メカニズムファミリー(VCG→トリガー戦略)に差し替えられることを、ケースをまたいで実証。"
     )
+    lines.append(
+        "- プラガブル性(#11、D-45): 最適化ベースエージェント(D-34でケース1のみに適用)を"
+        "このケースにも展開した。VCGの支払い構造を前提にした`OptimizingBidderAgent`は"
+        "そのまま再利用できず、勝率×真の評価額という別の期待効用構造向けに"
+        "`OptimizingCreditAwareAgent`を新設した——「型としては差し替え可能」であっても"
+        "「振る舞いの実装は都度書く必要がある」(CLAUDE.md 2章 原則4)ことの実例。"
+    )
     lines.append("")
 
     lines.append("---")
@@ -403,6 +501,7 @@ def main() -> None:
           f"②MDP最適方策={mdp_result['optimal_action_at_normal_state']} / "
           f"③頑健性: 逸脱成功={mc_summary['profitable_count']}/{mc_summary['n_trials']} / "
           f"③信用枠内過大申告成功={credit_limit_mc_summary['profitable_count']}/{credit_limit_mc_summary['n_trials']} / "
+          f"③最適化ベース成功={optimizer_mc_summary['profitable_count']}/{optimizer_mc_summary['n_trials']} / "
           f"⑤DisCoPy={disco_py_pass}")
 
 

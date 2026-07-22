@@ -4,6 +4,7 @@ python cases/credit_allocation/smoke_test.py で(リポジトリルートから)
 """
 from __future__ import annotations
 
+import random
 import sys
 from pathlib import Path
 
@@ -21,7 +22,7 @@ from schemas.environment_schema import EnvironmentConfig, Trace
 from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
 
-from credit_agents import CreditAwareHonestAgent, CreditLimitMaximizingAgent
+from credit_agents import CreditAwareHonestAgent, CreditLimitMaximizingAgent, OptimizingCreditAwareAgent
 from deviation_test import run_four_scene_demo, run_sustained_strategy_comparison
 from incentive_engine import TriggerStrategyEngine, TriggerStrategyParameters, compute_credit_limit
 from payloads import CreditRoundRecord
@@ -198,6 +199,39 @@ def main() -> None:
     print(
         f"       (carol 割引後合計効用: 信用枠内過大申告={sustained_comparison.strategy_utility:+.2f} / "
         f"honest={sustained_comparison.honest_utility:+.2f})"
+    )
+
+    # --- D-45: 最適化ベースエージェント(信用枠内過大申告の独立な追試) -----------------
+    optimizing_engine = TriggerStrategyEngine(params)
+    optimizing_agent = OptimizingCreditAwareAgent(
+        "carol", agent_index=2, n_agents=3,
+        competitor_bid_sampler=lambda r: r.uniform(5.0, 20.0),
+        engine=optimizing_engine, high_value=15.0, low_value=15.0,
+        n_samples=100, rng=random.Random(0),
+    )
+    optimizing_action = optimizing_agent.decide(
+        ObservationInput(trace_summary={"round": 0, "credit_limit": 17.77})
+    )
+    check(
+        "④実行主体層(D-45): 最適化ベースエージェントは、信念分布が信用枠付近まで"
+        "広がる場合、信用枠の境界に近い値へ探索が収束する",
+        abs(optimizing_action.declared_value - 17.77) < 1.0,
+    )
+
+    optimizing_sustained_comparison = run_sustained_strategy_comparison(
+        agent_ids, "carol",
+        lambda agent_id: OptimizingCreditAwareAgent(
+            agent_id, agent_index=2, n_agents=3,
+            competitor_bid_sampler=lambda r: r.uniform(0.0, params.max_limit),
+            engine=optimizing_engine, high_value=15.0, low_value=15.0,
+            n_samples=50, rng=random.Random(0),
+        ),
+        optimizing_engine, lambda: EnvironmentClient(env_config), n_rounds=10, discount=0.9,
+    )
+    check(
+        "D-45: 最適化ベースエージェントでも、信用枠内に留まる過大申告はhonestを"
+        "上回る(ルールベース・敵対的LLMとは独立の手段による追試)",
+        optimizing_sustained_comparison.strategy_profitable,
     )
 
     print("\nすべての疎通確認に成功しました。")
