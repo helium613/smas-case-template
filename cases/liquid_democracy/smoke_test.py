@@ -23,6 +23,7 @@ from incentive_engine import LiquidDemocracyEngine, LiquidDemocracyParameters
 from schemas.environment_schema import EnvironmentConfig, Trace
 from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
+from verification_kit.gambit_collusion import check_pure_nash_collusion
 
 
 def check(label: str, condition: bool) -> None:
@@ -213,6 +214,41 @@ def main() -> None:
         conserved_count == n_trials,
     )
     print(f"       (モンテカルロ N={n_trials}試行、循環等で無効票が出た試行数={had_cycle_count})")
+
+    # --- 検証キット: pygambitによる結託耐性(#5、D-39で保留した項目をD-48で決着) -------
+    # 3対1で反対票が優勢な構成(alice/carol/erinが"no"固定、frankが"yes"固定)で、
+    # 残り2人(bob/dave)の結託を検証する。
+    collusion_fixed = [
+        Declaration(agent_id="alice", declared_ranking=["no", "yes"]),
+        Declaration(agent_id="carol", declared_ranking=["no", "yes"]),
+        Declaration(agent_id="erin", declared_ranking=["no", "yes"]),
+        Declaration(agent_id="frank", declared_ranking=["yes", "no"]),
+    ]
+
+    def make_collusion_declaration(agent_id: str, strategy: str) -> Declaration:
+        if strategy == "yes":
+            return Declaration(agent_id=agent_id, declared_ranking=["yes", "no"])
+        if strategy == "no":
+            return Declaration(agent_id=agent_id, declared_ranking=["no", "yes"])
+        return Declaration(agent_id=agent_id, delegate_to=agent_id)  # "void": 自己委任で自ら無効票化
+
+    def collusion_payoff(bob_strategy: str, dave_strategy: str) -> tuple[float, float]:
+        declarations = collusion_fixed + [
+            make_collusion_declaration("bob", bob_strategy), make_collusion_declaration("dave", dave_strategy)
+        ]
+        winner = engine.allocate_and_pay(declarations).allocated_agent_ids[0]
+        utility = 1.0 if winner == "yes" else 0.0
+        return utility, utility
+
+    collusion = check_pure_nash_collusion(
+        strategies_a=["yes", "no", "void"], strategies_b=["yes", "no", "void"],
+        payoff_fn=collusion_payoff, honest_strategy_a="yes", honest_strategy_b="yes",
+    )
+    check(
+        "検証キット(D-48): 委任構造を組み合わせても、正直な投票を上回る結託の均衡は存在しない"
+        "(各エージェントの寄与は直接投票・委任のいずれでも最大1票を超えないため)",
+        not collusion.collusion_profitable,
+    )
 
     print("\nすべての疎通確認に成功しました。")
 
