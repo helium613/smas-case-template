@@ -254,17 +254,20 @@
         </table>
       </div>
       <div class="dash-legend">
-        <span class="legend-item"><span class="chip yes">検証済</span>このケースで実際に使用・確認済み</span>
-        <span class="legend-item"><span class="chip na">—</span>未着手(このケースでは使われていない)</span>
+        <span class="legend-item"><span class="chip yes">型準拠OK/収束/失敗</span>基準動作を確認、または逸脱がメカニズムに通用しなかった</span>
+        <span class="legend-item"><span class="chip no">成功/穴を発見</span>逸脱がメカニズムを実際に出し抜いた(脆弱性の発見)</span>
+        <span class="legend-item"><span class="chip na">—</span>このケースでは未実施</span>
       </div>
       <div class="dash-note">
         <b>この表が示すこと</b>: 評価観点#11(プラガブル性)は「ケース×指標」の表では見えない、
         もう1つの軸——<b>ルールベースは全4ケースで確認済みだが、LLMモック・LLM実物・最適化ベース・
-        敵対的LLMは、それぞれ<u>ただ1つのケースでしか実際に試されていない</u></b>。「型としては
-        差し替え可能」という主張と、「実際に4ケース全部で動かして確認した」という主張は別物であり、
-        この表は後者がまだ部分的にしか達成されていないことを正直に示す。
+        敵対的LLMは、それぞれ<u>ただ1つのケースでしか実際に試されていない</u></b>。加えて各セルは
+        「検証したかどうか」ではなく<b>具体的な成否・数値</b>(タブ2で算出済みの実数値を再利用)を
+        示す——「素朴な逸脱」と「ケース固有の巧妙な逸脱」を分けて見ると、前者は2ケースとも失敗した
+        一方、後者(信用枠内の過大申告・埋葬戦術)はいずれも成功しており、<b>メカニズムを実際に
+        出し抜けたのは、メカニズムの構造を踏まえた専用の戦略だけ</b>だったことが読み取れる。
       </div>
-      <div class="source">出典: 各ケースの <code>smoke_test.py</code>・<code>generate_results_summary.py</code>・<code>demo_llm_*.py</code> の実際のimport文を確認。</div>
+      <div class="source">出典: 各ケースの <code>smoke_test.py</code>・<code>generate_results_summary.py</code>・<code>demo_llm_*.py</code>の実際のimport文と、タブ2の実測値。</div>
     </div>
   </div>
 </div>
@@ -502,41 +505,66 @@
   });
 
   // ---------------- agent-centric view ----------------
+  // 各セルは {kind, metric} — kindは表示色(conform=素の基準確認、held=逸脱が
+  // 失敗=メカニズムにとって良い結果、exploited=逸脱が成功=脆弱性の発見、na=未実施)、
+  // metricはタブ2で既に算出済みの実数値を再利用する(「検証済」という曖昧な表示を、
+  // 具体的な成否・数値に置き換える、可視化フィードバック(2)への対応)。
   var agentRows = [
     {
       name: "ルールベース(正直)", sub: "HonestRuleBasedAgent 等",
-      c1: "yes", c2: "yes", c3: "yes", c4: "yes",
+      c1: { kind: "conform", metric: "型準拠OK" },
+      c2: { kind: "conform", metric: "型準拠OK" },
+      c3: { kind: "conform", metric: "型準拠OK" },
+      c4: { kind: "conform", metric: "型準拠OK" },
       note: "全ケース共通の基準点。申告の「形」(数値→順位→委任先)が変わってもAgentプロトコル自体は無変更(#11)。"
     },
     {
-      name: "ルールベース(逸脱)", sub: "Overstating / Greedy / CreditLimitMaximizing / 埋葬戦術",
-      c1: "yes", c2: "yes", c3: "yes", c4: "na",
-      note: "GreedyOverstatingAgentはケース1→2で無改造のまま再利用(#11の実例)。ケース4は循環委任の配線で代用、専用クラスは無し。"
+      name: "ルールベース(素朴な逸脱)", sub: "OverstatingRuleBasedAgent / GreedyOverstatingAgent",
+      c1: { kind: "held", metric: "失敗 0/1000" },
+      c2: { kind: "held", metric: "失敗 0/50" },
+      c3: { kind: "na", metric: "—" },
+      c4: { kind: "na", metric: "—" },
+      note: "固定倍率・固定高値で申告する素朴な逸脱。GreedyOverstatingAgentはケース1→2で無改造のまま再利用し、いずれも失敗(#11の実例、メカニズムは頑健)。"
+    },
+    {
+      name: "ルールベース(巧妙な逸脱、ケース固有)", sub: "CreditLimitMaximizingAgent / BuryingStrategicAgent",
+      c1: { kind: "na", metric: "—" },
+      c2: { kind: "exploited", metric: "成功 50/50" },
+      c3: { kind: "exploited", metric: "成功 16/200" },
+      c4: { kind: "na", metric: "—" },
+      note: "メカニズム固有の抜け道を突く戦略。信用枠は超えずその内側で過大申告する(D-37/38)、ボルダ得点の埋葬戦術(D-27/29)——いずれもメカニズムの脆弱性を実際に暴いた。"
     },
     {
       name: "LLMモック", sub: "ProbabilisticMockAgent",
-      c1: "yes", c2: "na", c3: "na", c4: "na",
+      c1: { kind: "conform", metric: "型準拠OK" },
+      c2: { kind: "na", metric: "—" }, c3: { kind: "na", metric: "—" }, c4: { kind: "na", metric: "—" },
       note: "モンテカルロ用の確率的エージェント。ケース1のみで使用、他ケースへの展開はまだ行っていない。"
     },
     {
       name: "LLM実物", sub: "AnthropicToolUseAgent",
-      c1: "yes", c2: "na", c3: "na", c4: "na",
+      c1: { kind: "conform", metric: "正直申告を確認" },
+      c2: { kind: "na", metric: "—" }, c3: { kind: "na", metric: "—" }, c4: { kind: "na", metric: "—" },
       note: "正直な基準動作を実際のAPI呼び出しで確認(D-18・D-36)。他ケースでは未検証。"
     },
     {
       name: "最適化ベース", sub: "OptimizingBidderAgent",
-      c1: "yes", c2: "na", c3: "na", c4: "na",
-      note: "信念分布の形状によらず、期待効用を最大化する申告額が真の評価額に収束することを数値的に確認(D-34)。他ケースでは未検証。"
+      c1: { kind: "held", metric: "収束(誤差<0.2)" },
+      c2: { kind: "na", metric: "—" }, c3: { kind: "na", metric: "—" }, c4: { kind: "na", metric: "—" },
+      note: "信念分布の形状によらず、期待効用を最大化する申告額が真の評価額に収束(D-34)——連続空間の数値探索でも抜け道が見つからなかった。他ケースでは未検証。"
     },
     {
       name: "敵対的LLM", sub: "AdversarialToolUseAgent",
-      c1: "na", c2: "yes", c3: "na", c4: "na",
+      c1: { kind: "na", metric: "—" },
+      c2: { kind: "exploited", metric: "穴を発見" },
+      c3: { kind: "na", metric: "—" }, c4: { kind: "na", metric: "—" },
       note: "「信用枠内に留まる恒常的な過大申告」という検出ルールの穴を発見(D-37)。ケース2でのみ実施——ケース1にはそもそも検出ルールが無いため対象外。"
     }
   ];
 
-  function agentChip(kind) {
-    return kind === "yes" ? '<span class="chip yes">検証済</span>' : '<span class="chip na">—</span>';
+  function agentChip(cell) {
+    var label = cell.metric;
+    var cls = cell.kind === "conform" ? "yes" : cell.kind === "held" ? "yes" : cell.kind === "exploited" ? "no" : "na";
+    return '<span class="chip ' + cls + '">' + label + "</span>";
   }
 
   var agentsBody = document.getElementById("agents-body");
