@@ -293,7 +293,7 @@ def main() -> None:
     lines.append("生成コマンド: `python generate_results_summary.py`")
     lines.append("")
     lines.append("CLAUDE.md 10章の運用ルールに従い、5大指標を主役として記載する。")
-    lines.append("24項目評価観点(docs/evaluation_criteria.md)は各指標の根拠として番号付きで1行併記する。")
+    lines.append("25項目評価観点(docs/evaluation_criteria.md)は各指標の根拠として番号付きで1行併記する。")
     lines.append("")
     lines.append("## 5大指標")
     lines.append("")

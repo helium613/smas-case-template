@@ -162,6 +162,29 @@
 
   .source { padding: 12px 20px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); line-height: 1.6; }
 
+  /* ---------- Criteria & report view ---------- */
+  .criteria-intro { margin: 18px 20px 4px; font-size: 12.5px; color: var(--text-muted); line-height: 1.6; }
+  .criteria-intro code { font-family: var(--font-mono); font-size: 11.5px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+  .criteria-table .group-row td { padding: 14px 14px 4px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent); border-bottom: none; }
+  .criteria-table td.crit-name { white-space: normal; min-width: 190px; font-size: 12.5px; }
+  .criteria-table td.crit-name b { display: block; }
+  .criteria-table td.crit-name span { color: var(--text-faint); font-family: var(--font-mono); font-size: 10.5px; }
+
+  .report-viewer { margin: 22px 20px 20px; border-top: 1.4px dashed var(--border); padding-top: 18px; }
+  .report-viewer-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  .report-viewer-header h3 { font-size: 15px; margin: 0; }
+  .report-body { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; font-size: 13px; line-height: 1.7; max-height: 640px; overflow-y: auto; }
+  .report-body h1 { font-size: 18px; margin: 0 0 6px; }
+  .report-body h2 { font-size: 15px; margin: 22px 0 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .report-body h3 { font-size: 13.5px; margin: 16px 0 6px; color: var(--accent); }
+  .report-body p { margin: 8px 0; color: var(--text-muted); }
+  .report-body ul { margin: 6px 0; padding-left: 20px; }
+  .report-body li { margin: 4px 0; color: var(--text-muted); }
+  .report-body li li { list-style: circle; margin-left: 8px; }
+  .report-body code { font-family: var(--font-mono); font-size: 11.5px; background: var(--panel-3); padding: 1px 5px; border-radius: 4px; }
+  .report-body hr { border: none; border-top: 1.4px dashed var(--border); margin: 16px 0; }
+  .report-body strong { color: var(--text); }
+
   @media (max-width: 880px) {
     .dash-table { display: block; overflow-x: auto; }
   }
@@ -182,6 +205,7 @@
     <button class="tab active" data-view="pipeline" role="tab" aria-selected="true">① アーキテクチャ(共通骨格)</button>
     <button class="tab" data-view="dashboard" role="tab" aria-selected="false">② 5大指標ダッシュボード</button>
     <button class="tab" data-view="agents" role="tab" aria-selected="false">③ 実行主体層別ダッシュボード</button>
+    <button class="tab" data-view="criteria" role="tab" aria-selected="false">④ 評価観点・レポート全文</button>
   </div>
 
   <!-- ================= Pipeline view ================= -->
@@ -274,6 +298,55 @@
         一致するとは限らない、という留保も同時に示している。
       </div>
       <div class="source">出典: 各ケースの <code>smoke_test.py</code>・<code>generate_results_summary.py</code>・<code>demo_llm_*.py</code>の実際のimport文と、タブ2の実測値。</div>
+    </div>
+  </div>
+
+  <!-- ================= Criteria & full-report view ================= -->
+  <div class="view" id="view-criteria">
+    <div class="panel">
+      <div class="criteria-intro">
+        評価観点25項目(<code>docs/evaluation_criteria.md</code>)を軸にした、ケース横断ビュー。
+        タブ②の5大指標は「大まかな羅針盤」、この表は「どの観点がどのケースで実際に検証された
+        かの詳細な一覧」——大指標に対応表が無い#10・#11のような項目も含め、25項目すべてを
+        1つの表で見渡せる(<code>roadmap_consistency_memo.md</code>の位置づけどおり)。
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="dash-table criteria-table">
+          <thead>
+            <tr>
+              <th>評価観点</th>
+              <th>①タスク配分</th>
+              <th>②信用枠配分</th>
+              <th>③投票</th>
+              <th>④Liquid Democracy</th>
+            </tr>
+          </thead>
+          <tbody id="criteria-body"></tbody>
+        </table>
+      </div>
+      <div class="dash-legend">
+        <span class="legend-item"><span class="chip yes">PASS</span>満たす・確認済み</span>
+        <span class="legend-item"><span class="chip no">FAIL</span>満たさない(意図的な場合を含む)</span>
+        <span class="legend-item"><span class="chip mixed">参考</span>直接測定ではない代替評価</span>
+        <span class="legend-item"><span class="chip na">N/A・未検証</span>適用対象外、またはこのケースでは未検証</span>
+      </div>
+      <div class="dash-note">
+        <b>この表が示すこと</b>: 「#N」の記載有無は各ケースの<code>results/summary.md</code>から
+        機械的に抽出して確認した(タグが無い観点は、たとえ関連する議論があっても「未検証」扱いに
+        している——例: 評価観点#12「適応的逸脱への頑健性」は、D-37/D-38・D-46の発見が概念的には
+        該当するが、レポート本文中に「#12」というタグが実際には付けられていない、というタグ漏れ
+        自体も1つの発見)。#3・#4・#6・#18・#21・#22は4ケースいずれからも一度も検証されていない
+        (D-50/D-51の棚卸しで確認済み)。
+      </div>
+      <div class="source">出典: 各ケースの <code>results/summary.md</code>の実テキスト(#N表記の有無)を機械的に確認し、状態の要約は本文の記載をもとに転記。</div>
+
+      <div class="report-viewer">
+        <div class="report-viewer-header">
+          <h3>レポート全文</h3>
+          <div class="case-picker" id="report-case-picker"></div>
+        </div>
+        <div class="report-body" id="report-body"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -589,6 +662,194 @@
       "</tr>"
     );
   }).join("");
+
+  // ---------------- criteria matrix (評価観点25項目、D-52) ----------------
+  // 各セルの kind/text は、各ケースのresults/summary.mdの実テキストを機械的に
+  // 確認して転記したもの(「#N」タグの有無は機械的抽出、状態の要約は本文の
+  // 記載どおり)。タグが無い観点は、関連する議論があっても「未検証」として扱う
+  // (推測でPASS/FAILを補わない)。
+  var criteriaGroups = [
+    { title: "①概念層由来", rows: [
+      { num: "1", name: "誘因整合性", sub: "Incentive Compatibility",
+        c1: ["yes", "得にならず(D-34数値最適化でも確認)"], c2: ["no", "満たさない(D-37/38)"],
+        c3: ["no", "満たさない(意図的、D-27)"], c4: ["na", "未検証(集計方式はケース3が担当、D-30)"] },
+      { num: "2", name: "耐戦略性", sub: "Strategy-Proofness",
+        c1: ["yes", "得にならず(D-34数値最適化でも確認)"], c2: ["no", "満たさない(D-37/38)"],
+        c3: ["no", "満たさない(意図的、D-27)"], c4: ["na", "未検証(集計方式はケース3が担当、D-30)"] },
+      { num: "3", name: "情報の非対称性の制御", sub: "Information Asymmetry Control",
+        c1: ["na", "未検証"], c2: ["na", "未検証"], c3: ["na", "未検証"], c4: ["na", "未検証"] },
+      { num: "4", name: "必要多様性", sub: "Law of Requisite Variety",
+        c1: ["na", "未検証"], c2: ["na", "未検証"], c3: ["na", "未検証"], c4: ["na", "未検証"] },
+      { num: "25", name: "個人合理性", sub: "Individual Rationality",
+        c1: ["yes", "成立"], c2: ["yes", "成立(支払いなし)"], c3: ["yes", "成立"], c4: ["yes", "成立"] },
+    ]},
+    { title: "②誘因構造層由来", rows: [
+      { num: "5", name: "結託耐性", sub: "Collusion Resistance",
+        c1: ["no", "満たさない(D-33)"], c2: ["na", "意図的に未実装(D-39)"],
+        c3: ["no", "満たさない(D-39)"], c4: ["yes", "満たす(D-48)"] },
+      { num: "6", name: "コストリー・シグナリングの妥当性", sub: "Costly Signaling Validity",
+        c1: ["na", "未検証"], c2: ["na", "未検証"], c3: ["na", "未検証"], c4: ["na", "未検証"] },
+      { num: "7", name: "時間発展・繰り返しゲームでの安定性", sub: "Stability under Repeated Games",
+        c1: ["na", "1回性のため対象外"], c2: ["yes", "MDPで収束確認"],
+        c3: ["na", "1回性のため対象外"], c4: ["na", "1回性のため対象外"] },
+    ]},
+    { title: "③集約層由来", rows: [
+      { num: "8", name: "決定論性・局所-大域整合性", sub: "Determinism / Local-Global Consistency",
+        c1: ["yes", "純関数、ローカル計算が一致"], c2: ["yes", "同左"], c3: ["yes", "同左"], c4: ["yes", "同左(重みの保存則も含む)"] },
+      { num: "9", name: "集約の操作耐性", sub: "Aggregation Manipulation Resistance",
+        c1: ["na", "未タグ"], c2: ["na", "未タグ"], c3: ["no", "満たさない(埋葬戦術)"], c4: ["na", "未タグ"] },
+      { num: "10", name: "公平性(Envy-freeness)", sub: "Fairness",
+        c1: ["yes", "Pass(D-51で初検証)"], c2: ["na", "未検証"], c3: ["na", "未検証"], c4: ["na", "未検証"] },
+    ]},
+    { title: "④実行主体層由来", rows: [
+      { num: "11", name: "プラガブル性", sub: "Pluggability",
+        c1: ["yes", "Pass"], c2: ["yes", "Pass"], c3: ["yes", "Pass"], c4: ["yes", "Pass"] },
+      { num: "12", name: "適応的逸脱への頑健性", sub: "Robustness to Adaptive Deviation",
+        c1: ["na", "未タグ"], c2: ["na", "レポートに#12タグなし(D-37/38は概念的に該当、タグ漏れ)"],
+        c3: ["na", "レポートに#12タグなし(D-46は概念的に該当、タグ漏れ)"], c4: ["na", "未タグ"] },
+    ]},
+    { title: "⑤検証層由来", rows: [
+      { num: "13", name: "合成則の充足", sub: "Composition Law Satisfaction",
+        c1: ["yes", "DisCoPy 4/4 Pass"], c2: ["yes", "同左"], c3: ["yes", "同左"], c4: ["yes", "同左"] },
+      { num: "14", name: "権力集中の不在", sub: "Absence of Concentrated Power",
+        c1: ["yes", "Pass(介入ポート未行使)"], c2: ["yes", "Pass(介入ポート行使済み)"],
+        c3: ["yes", "Pass(LangGraph実地検証)"], c4: ["yes", "Pass(委任の定義再検討あり)"] },
+      { num: "15", name: "新規ケースへの対応づけ可能性", sub: "Functorial Transferability",
+        c1: ["na", "2ケース目未着手のため対象外"], c2: ["yes", "ケース1から対応づけ確認"],
+        c3: ["yes", "ケース1・2から対応づけ確認"], c4: ["yes", "ケース1〜3から対応づけ確認"] },
+    ]},
+    { title: "実行時・実証的な評価観点", rows: [
+      { num: "16", name: "並行安全性", sub: "Concurrency Safety",
+        c1: ["yes", "Quintシミュレーション Pass"], c2: ["yes", "同左"], c3: ["yes", "同左"], c4: ["yes", "同左"] },
+      { num: "17", name: "収束性そのもの", sub: "Convergence",
+        c1: ["mixed", "③頑健性を参照(代替評価)"], c2: ["yes", "MDPで直接測定"],
+        c3: ["mixed", "③頑健性を参照(代替評価)"], c4: ["na", "未タグ"] },
+      { num: "18", name: "通信密度の臨界点", sub: "Percolation Threshold",
+        c1: ["na", "対象外(規模が小さい)"], c2: ["na", "対象外"], c3: ["na", "対象外"], c4: ["na", "対象外"] },
+    ]},
+    { title: "横断的な評価観点", rows: [
+      { num: "19", name: "委任連鎖を通した誘因構造の伝播の妥当性", sub: "Incentive Propagation through Delegation",
+        c1: ["na", "委任構造が無いため対象外"], c2: ["na", "対象外"], c3: ["na", "対象外"], c4: ["yes", "Pass(初検証)"] },
+      { num: "20", name: "逸脱注入からの回復力", sub: "Recovery from Deviation Injection",
+        c1: ["yes", "Pass(シーン3反実仮想)"], c2: ["yes", "Pass(信用枠回復確認)"],
+        c3: ["na", "未タグ"], c4: ["na", "未タグ"] },
+    ]},
+    { title: "精緻化項目", rows: [
+      { num: "21", name: "参加者の入退場に対する頑健性", sub: "Robustness to Population Dynamics",
+        c1: ["na", "未検証"], c2: ["na", "未検証"], c3: ["na", "未検証"], c4: ["na", "D-31が部分的にカバー(D-50)"] },
+      { num: "22", name: "開示情報の最小性", sub: "Disclosure Minimality",
+        c1: ["na", "未検証"], c2: ["na", "未検証"], c3: ["na", "未検証"], c4: ["na", "未検証"] },
+      { num: "23", name: "打ち切り耐性", sub: "Termination Robustness",
+        c1: ["yes", "完走確認"], c2: ["yes", "同左"], c3: ["yes", "同左"], c4: ["yes", "同左"] },
+      { num: "24", name: "資源コスト", sub: "Resource Cost",
+        c1: ["yes", "実測記録済み"], c2: ["yes", "同左"], c3: ["yes", "同左"], c4: ["yes", "同左"] },
+    ]},
+  ];
+
+  function critChip(cell) {
+    var kind = cell[0], text = cell[1];
+    var cls = kind === "yes" ? "yes" : kind === "no" ? "no" : kind === "mixed" ? "mixed" : "na";
+    var label = kind === "yes" ? "PASS" : kind === "no" ? "FAIL" : kind === "mixed" ? "参考" : "—";
+    return (
+      '<div class="cell">' +
+      '<span class="chip ' + cls + '">' + label + "</span>" +
+      '<div class="cell-text">' + text + "</div>" +
+      "</div>"
+    );
+  }
+
+  var criteriaBody = document.getElementById("criteria-body");
+  var criteriaHtml = "";
+  criteriaGroups.forEach(function (group) {
+    criteriaHtml += '<tr class="group-row"><td colspan="5">' + group.title + "</td></tr>";
+    group.rows.forEach(function (row) {
+      criteriaHtml +=
+        "<tr>" +
+        '<td class="crit-name"><b>#' + row.num + " " + row.name + "</b><span>" + row.sub + "</span></td>" +
+        "<td>" + critChip(row.c1) + "</td>" +
+        "<td>" + critChip(row.c2) + "</td>" +
+        "<td>" + critChip(row.c3) + "</td>" +
+        "<td>" + critChip(row.c4) + "</td>" +
+        "</tr>";
+    });
+  });
+  criteriaBody.innerHTML = criteriaHtml;
+
+  // ---------------- full report viewer (D-52) ----------------
+  /* REPORTS_DATA_START (visualize/embed_reports.py が機械的に更新する、手編集禁止) */
+  var REPORTS = {
+    "task_allocation": "# 1ケース目(タスク配分・VCG) 検証結果サマリー\n\n生成日時(UTC): 2026-07-22T16:47:47+00:00\n生成コマンド: `python generate_results_summary.py`\n\nCLAUDE.md 10章の運用ルールに従い、5大指標を主役として記載する。\n25項目評価観点(docs/evaluation_criteria.md)は各指標の根拠として番号付きで1行併記する。\n\n## 5大指標\n\n### ①到達可能性: Yes\n- 個人合理性(#25): シーン1(正直申告、15件)の実現効用はすべて0以上(成立)。\n- 権力集中の不在(#14): ⑤構造検証(全4項目)がすべてPass(壁による自領域外書き込み拒否を含む)。介入ポート(`EnvironmentClient.record_intervention`)は型定義のみで、本ケースでは未行使のため監視対象外(未検証、`DECISIONS.md` D-21)。\n\n### ②収束性: 1回性エンジンにつきMDP適用対象外(SMAS_theorymap.md 2.1節)\n- 決定論性・局所-大域整合(#8): ②誘因構造エンジンは純関数(同一入力→同一出力)であり、各エージェントのローカル計算は自明に一致する。\n- 逸脱注入からの回復力(#20): シーン3(自己拘束の確認、D-07)で反実仮想比較を実施。carolの合計効用は 逸脱=-12.00 / 正直(反実仮想)=+4.00(逸脱は得にならず)。\n- 収束性そのもの(#17): 代替評価として③頑健性(モンテカルロ)を参照。\n\n### ③頑健性: モンテカルロ N=1000試行、逸脱が得になったケース数=0(0.0%)\n- 誘因整合性(#1)・耐戦略性(#2): 上記の通り、過大申告(alice、1.3倍)は一度も得にならなかった。\n- 結託耐性(#5、D-33で初めて検証): **満たさない**。`pygambit`(技術スタックに③頑健性用として記載済みだが4ケースを通じて未使用だった)で、alice/bobの2者間の戦略形ゲーム(離散化した申告の組み合わせ)を純戦略ナッシュ均衡で解いたところ、6個の均衡が見つかった。honestな申告(alice=10, bob=7、合計効用=3.0)も均衡の1つだが、bobが非ピボット(自分の申告額が勝敗を左右しない)であるために複数の申告額に無差別となり、結託側がより有利な均衡(alice=10, bob=0、合計効用=5.0)を外部のサイドペイメントで選べてしまう。単独逸脱への耐戦略性(上記モンテカルロ)とは別の脆弱性であり、VCGの既知の限界(サイドペイメントの執行はscope_exclusions_and_deferrals.md Part0「支払いの執行と沈め先」と同じ、外生的な仮定でスコープ外)。\n- **本チェックの限界**: 結託耐性の検証は、alice=10/bob=7/carol=5という1つの具体例をpygambitで厳密に解いたものであり、上記モンテカルロ(1000試行)のような統計的な広がりは持たせていない。既知の理論的脆弱性の存在証明としては1例で十分だが、他の評価額配置への一般化は主張しない。\n- 誘因整合性(#1)・耐戦略性(#2、D-34で数値最適化による検証を追加): 最適化ベースエージェント(`agents/optimization_based.py`)が、競合の申告額に関する信念分布を一様分布[0,20]/一様分布[8,30]の2通り仮定して期待効用を数値最適化したところ、いずれも真の評価額(10.0)に収束した(一様分布[0,20]: 申告=9.81, 一様分布[8,30]: 申告=10.00)。ルールベース(1.3倍等、ハンドピックした数点)とは異なり、連続空間上の数値探索で耐戦略性を検証した初めての例(信念分布の形状によらず最適解が真の評価額と一致する)。\n- 打ち切り耐性(#23): 3シーン構成の全10ラウンドでフォールバックに落ちず完走(確認済み)。\n\n### ④資源コスト: 計算量・実行時間の概算(このマシンでの1回計測、参考値)\n- VCGエンジン(単発呼び出し、申告2件): O(n log n)(申告のソート)。実測 0.01 ms\n- 3シーン構成(scene1×5, scene2×5): 実測 0.001 秒\n- モンテカルロ N=1000試行: 実測 0.009 秒(0.009 ms/試行)\n- pygambit結託耐性チェック(2×3戦略の純戦略ナッシュ均衡列挙): 実測 0.52 ms\n- 最適化ベースエージェント(scipy.optimize、信念分布2通り×300サンプル): 実測 47.97 ms\n- ⑤DisCoPy構造検証: 実測 0.63 ms\n- 資源コスト(#24)の内訳としては以上の通り。分散台帳・検証可能遅延関数等の本番運用コストは技術選定が未決のため対象外(SMAS_theorymap.md 5章)。\n\n### ⑤検証可能性: DisCoPy Pass / Quint Pass(シミュレーション、網羅的証明ではない) — `quint run`(500サンプル、safety不変条件: 反復回数がMAX_ITERATIONSを超えない/フォールバックは反復上限到達後にのみ発生する)で違反なし。Apalache(SMT、安全性)・TLC(公平性を伴う活性: 「ラウンドは必ず終端に達する」)による網羅的検証は、quint↔Apalache間のgRPCプロトコル互換性バグによりこの環境では未実施(docs/DECISIONS.md D-19)。`.qnt`はtypecheck済みで、環境を修復すれば`cases\\task_allocation\\quint\\task_allocation.qnt`の再実行のみで足りる。\n- 合成則の充足(#13): 結合律・単位律を含む構造検証、4項目中4項目Pass。\n  - boundary_type_match: Pass\n  - associativity: Pass\n  - unitality: Pass\n  - absence_of_concentrated_power: Pass\n- 関手による対応づけ(#15): 2ケース目未着手のため今回は対象外。\n- 並行安全性(#16)・打ち切り耐性(#23)の形式的側面: Pass(シミュレーション、網羅的証明ではない) — `quint run`(500サンプル、safety不変条件: 反復回数がMAX_ITERATIONSを超えない/フォールバックは反復上限到達後にのみ発生する)で違反なし。Apalache(SMT、安全性)・TLC(公平性を伴う活性: 「ラウンドは必ず終端に達する」)による網羅的検証は、quint↔Apalache間のgRPCプロトコル互換性バグによりこの環境では未実施(docs/DECISIONS.md D-19)。`.qnt`はtypecheck済みで、環境を修復すれば`cases\\task_allocation\\quint\\task_allocation.qnt`の再実行のみで足りる。\n\n## 5大指標に対応表がない評価観点(補足)\n\n- プラガブル性(#11): Pass — ルールベース・LLMモック・LLM実物・最適化ベース(D-34追加)の4実装が同一のAgentプロトコル(schemas/agent_schema.py)を満たす(確認)。ルールベース・LLMモックは同一のrun_scene(①〜③の実パイプライン)に無改造で差し替え可能(確認)。LLM実物も同じ経路で動作することはdemo_llm_real.pyで実演済み(資格情報が必要なためこのレポートでは自動実行しない)。型の互換性のみを確認しており、振る舞いの同等性(LLMが理論通り動くか)は主張しない。\n- 公平性(#10、Envy-freeness、D-51で初検証): Pass — シーン1(正直申告、5ラウンド、10件の敗者×勝者の組)のいずれでも、敗者が勝者の結果(アイテム+支払い額)を羨むケースは無かった(0/10件)。VCG(セカンドプライス)は、敗者の真の価値が定義上「勝者の支払い額(=2番目に高い申告額)」を超えないため、正直申告のもとでは理論上常に成立する性質(容易に証明できる古典的結果)であり、数値的に裏付けた。逸脱注入時(シーン2・3)や結託時の公平性までは検証していない。\n\n---\n\n**限界の明記**: ②収束性はMDPが適用できないため代替評価に留まる。③頑健性のモンテカルロは本スクリプトが定義した逸脱分布(過大申告1.3倍)に対する頑健性のみを保証し、それ以外の逸脱パターンへの一般化は主張しない。⑤検証可能性のQuintは、安全性不変条件のシミュレーション(有限サンプル)による経験的確認に留まり、Apalache(SMT)・TLC(公平性を伴う活性検証)による網羅的な形式検証ではない(環境のツールチェイン不具合による、docs/DECISIONS.md D-19)。\n",
+    "credit_allocation": "# 2ケース目(信用枠配分・トリガー戦略) 検証結果サマリー\n\n生成日時(UTC): 2026-07-22T16:47:59+00:00\n生成コマンド: `python cases/credit_allocation/generate_results_summary.py`\n\nCLAUDE.md 10章の運用ルールに従い、5大指標を主役として記載する。\n25項目評価観点(docs/evaluation_criteria.md)は各指標の根拠として番号付きで1行併記する。\n\n## 5大指標\n\n### ①到達可能性: Yes\n- 個人合理性(#25): 支払いが発生しないメカニズムのため、実現効用は構造的に常に0以上(勝てば真の評価額分の効用、負ければ0)。\n- 権力集中の不在(#14): ⑤構造検証(全4項目)がすべてPass。介入ポート: Pass — VersionedMechanism.with_interventionを実行し、punishment_rounds=10→5への改定をInterventionRecordとして記録(バージョン1.0.0→1.1.0)。env.intervention_historyに1件の記録あり。ケース1では型定義のみで未行使だったギャップをここで解消(D-21/D-22)。\n\n### ②収束性: MDP(value iteration)で「常に遵守」が最適方策として収束する\n- 時間発展・繰り返しゲームでの安定性(#7): 制裁期間10ラウンド、割引率0.9のもとで、通常状態での最適行動は「honest」(value=37.55、12回で収束)。ケース1(1回性VCG)では適用対象外だったMDPが、ここで初めて本来の役割を果たす(SMAS_theorymap.md 2.1節)。\n- **本チェックの範囲(重要)**: `pymdptoolbox`はシングルエージェント用のMDPソルバーであり、ここでの用途は「他エージェントは正直・制裁ルールは固定という前提のもとで、1エージェント(逸脱候補)が単独逸脱して得をしないか」を検証する、繰り返しゲームの均衡検証における標準手法「一撃逸脱原理(one-shot deviation principle)」への還元である。単独逸脱の非収益性のみを確認するものであり、複数エージェントの結託(#5、未検証)や、他の均衡が存在しないことまでは検証していない(docs/DECISIONS.md D-25)。\n- 逸脱注入からの回復力(#20): 4シーンデモでシーン4終盤にcarolの信用枠がpunishment_limit(0.5)を超えて回復し始めることを確認済み。\n- 決定論性・局所-大域整合(#8): 信用枠は公開痕跡のみから決定論的に導出される(compute_credit_limit)。\n\n### ③頑健性: **総合結論は「満たさない」**(D-37/D-38)。素朴な逸脱(`GreedyOverstatingAgent`)には頑健(N=50試行中0件、0.0%)だが、信用枠内に留まる巧妙な過大申告には頑健でない(N=50試行中50件、100.0%)\n- **誘因整合性(#1)・耐戦略性(#2、総合結論、D-37/D-38)**: **満たさない**。「遵守」(信用枠以内)と「正直」(真の評価額どおり)は本メカニズムでは同値でない。敵対的LLM(D-37)が実際に発見した「信用枠のすぐ下を狙って恒常的に過大申告する」戦略(`CreditLimitMaximizingAgent`として再現、D-38)は、`TriggerStrategyEngine`が信用枠以内かどうかしかチェックしないため一切検出されない。信用枠は真の評価額と無関係に過去の遵守実績のみから育つため、この限界は原理的なもの(観測できない真の評価額を、観測可能な信用枠だけで縛ることはできない)であり、メカニズムの実装不備ではない——VCGの結託耐性の欠如(pygambit、D-33)と同種の、メカニズムファミリーに内在する既知の限界として記録する。\n- 素朴な逸脱への頑健性(参考、従来のモンテカルロ): 標準シナリオ(carol、carolの割引後合計効用: 逸脱=+37.73 / 遵守を貫いた場合(反実仮想)=+53.00)に加え、真の評価額の分布を変えた50試行でも、`GreedyOverstatingAgent`(固定高値、信用枠を即座に超えて検出される)には頑健であることを確認。ただし上記の通り、これは巧妙な逸脱(信用枠内の過大申告)までは検証できていなかった。\n- 信用枠内の恒常的過大申告への頑健性(D-37/D-38、上記総合結論の内訳): N=50試行(30ラウンド、真の評価額をランダム化)でモンテカルロ検証したところ、50件(100.0%)でこの戦略がhonestを上回った。\n- 最適化ベースエージェントによる独立の追試(D-45): ルールベース(`CreditLimitMaximizingAgent`)・敵対的LLM(D-37)とは独立の手段——競合の申告額に関する信念分布のもとで期待効用(勝率×真の評価額)をscipy.optimize.minimize_scalarで数値最大化する`OptimizingCreditAwareAgent`——でも同じ結論を確認した。信念分布が信用枠付近まで広がる場合(一様分布[5,20]: 申告=17.39(信用枠17.77との誤差0.38), 一様分布[10,30]: 申告=17.63(信用枠17.77との誤差0.14))、探索は信用枠の境界に収束する。この方針を全ラウンドで貫いたモンテカルロ(N=50試行)でも50件(100.0%)でhonestを上回り、D-37/D-38と同水準の結果を、感情や指示文に依存しない数値最適化から独立に得た。ただし信念分布の支持が信用枠より十分低い場合は、勝率が既に1に近い時点で期待効用が頭打ちになり、境界ちょうどへの収束は保証されない(探索範囲を信用枠以内に限定しているため、この場合でも信用枠を超えることはない)。\n- 単一ラウンドの申告ルールだけを見ると耐戦略性を満たさない(支払いが無く、最高申告額が常に勝つため)。正直申告(信用枠の遵守)が均衡になるのは、繰り返しによる将来の信用喪失という脅しがあってこそである、という設計の性質上、この指標は必ず複数ラウンドのシナリオで評価する(D-07の教訓をケース2でも維持)。\n- 打ち切り耐性(#23): 4シーン構成の全38ラウンドでフォールバックに落ちず完走(確認済み)。\n- 結託耐性(#5、D-39で検討): 本ケースには`pygambit`が適用できる意味のある結託シナリオが無いと判断し、意図的に未実装とした。`compute_credit_limit`は勝敗ではなく**遵守実績のみ**で信用枠を育てるため、「誰が勝つかを裏で調整する」結託は信用枠の成長に一切影響しない(当初案の「交代で違反」も、制裁は個別に完結するため無効)。D-37/D-38の抜け穴(信用枠内の恒常的過大申告)を複数エージェントが同時に使うことは可能だが、これは協調による相乗効果のあるナッシュ均衡ではなく、同じ単独最適戦略を複数人が独立に採用しているだけであり、pygambitのような均衡計算で新たに見えるものがない。ケース1(VCG)・ケース3(ボルダ得点)とは異なり、このメカニズムの構造上、pygambitに適した結託の定義が見つからなかった、という結論そのものを記録する。\n\n### ④資源コスト: 計算量・実行時間の概算(このマシンでの1回計測、参考値)\n- 4シーンデモ(実際+反実仮想、計76ラウンド): 実測 0.006 秒\n- モンテカルロ N=50試行(4シーンデモ全体×50): 実測 0.267 秒\n- モンテカルロ(D-37の発見、信用枠内の恒常的過大申告) N=50試行(30ラウンド×50): 実測 0.176 秒\n- 最適化ベースエージェント(D-45): 収束確認(信念分布2通り) 実測 62.2 ms、モンテカルロ N=50試行(30ラウンド×50): 実測 8.038 秒\n- MDP(value iteration、状態数11): 実測 2.09 ms\n- ⑤DisCoPy構造検証: 実測 0.61 ms\n- 資源コスト(#24): 分散台帳・検証可能遅延関数等の本番運用コストは技術選定が未決のため対象外。\n\n### ⑤検証可能性: DisCoPy Pass / Quint Pass(シミュレーション、網羅的証明ではない) — `quint run`(300サンプル、safety不変条件: 制裁の残り期間が[0, PUNISHMENT_ROUNDS]に収まる)で違反なし。Apalache(SMT、安全性)・TLC(公平性を伴う活性: 「制裁はいつか必ず明ける」)による網羅的検証は、ケース1(D-19)と同じ環境のツールチェイン不具合により未実施。`.qnt`はtypecheck済みで、環境を修復すれば`cases\\credit_allocation\\quint\\credit_allocation.qnt`の再実行のみで足りる。\n- 合成則の充足(#13): 結合律・単位律を含む構造検証、4項目中4項目Pass。\n  - boundary_type_match: Pass\n  - associativity: Pass\n  - unitality: Pass\n  - absence_of_concentrated_power: Pass\n- 関手による対応づけ(#15): ケース1(タスク配分)からの型の対応づけを確認済み。Declaration/AllocationResult/IncentiveEngine/VersionedMechanismはケース1と同じschemas/incentive_schema.pyの型をそのまま満たす(A側の書き換えなしで新規ケースを収容できた、CLAUDE.md 11章の危険信号チェックに合格)。\n- 並行安全性(#16)・打ち切り耐性(#23)の形式的側面: Pass(シミュレーション、網羅的証明ではない) — `quint run`(300サンプル、safety不変条件: 制裁の残り期間が[0, PUNISHMENT_ROUNDS]に収まる)で違反なし。Apalache(SMT、安全性)・TLC(公平性を伴う活性: 「制裁はいつか必ず明ける」)による網羅的検証は、ケース1(D-19)と同じ環境のツールチェイン不具合により未実施。`.qnt`はtypecheck済みで、環境を修復すれば`cases\\credit_allocation\\quint\\credit_allocation.qnt`の再実行のみで足りる。\n\n## 5大指標に対応表がない評価観点(補足)\n\n- プラガブル性(#11): Pass — 逸脱エージェント(GreedyOverstatingAgent)はケース1(agents/rule_based.py、共通実装)を無改造で再利用できた。ケース間で同一のAgentプロトコルを満たしたまま、全く異なるメカニズムファミリー(VCG→トリガー戦略)に差し替えられることを、ケースをまたいで実証。\n- プラガブル性(#11、D-45): 最適化ベースエージェント(D-34でケース1のみに適用)をこのケースにも展開した。VCGの支払い構造を前提にした`OptimizingBidderAgent`はそのまま再利用できず、勝率×真の評価額という別の期待効用構造向けに`OptimizingCreditAwareAgent`を新設した——「型としては差し替え可能」であっても「振る舞いの実装は都度書く必要がある」(CLAUDE.md 2章 原則4)ことの実例。\n\n---\n\n**限界の明記**: ③頑健性のモンテカルロは、真の評価額の分布(本スクリプトが定義したrange)に対する頑健性のみを保証する。②MDPの報酬値(honest_reward・temptation_reward)は4シーンデモの実測値に基づく概算であり、実装そのものの再現ではない(⑤検証層と同じ位置づけ)。⑤検証可能性のQuintは、安全性不変条件のシミュレーション(有限サンプル)による経験的確認に留まり、Apalache・TLCによる網羅的な形式検証ではない(環境のツールチェイン不具合による、docs/DECISIONS.md D-19)。\n",
+    "proposal_voting": "# 3ケース目(投票による共同意思決定・ボルダ得点) 検証結果サマリー\n\n生成日時(UTC): 2026-07-22T09:43:11+00:00\n生成コマンド: `python cases/proposal_voting/generate_results_summary.py`\n\nCLAUDE.md 10章の運用ルールに従い、5大指標を主役として記載する。\n25項目評価観点(docs/evaluation_criteria.md)は各指標の根拠として番号付きで1行併記する。\n\n**このケースの狙い(D-27)**: ケース1(VCG)・ケース2(トリガー戦略)はいずれも「良い設計」の検証実績しかなかった。ボルダ得点は理論上非耐戦略性のメカニズムであり、意図的にこれを実装することで、⑤検証層・③モンテカルロが「悪い設計」を正しく検出できるかを初めて確認する(mechanism_catalog.md Part3)。①到達可能性(個人合理性・権力集中の不在)と③頑健性(耐戦略性)は独立した軸であり、①=Yesでも③が悪いことは矛盾しない。\n\n## 5大指標\n\n### ①到達可能性: Yes\n- 個人合理性(#25): 支払いが発生せず真の評価額も非負のため、シーン1(正直申告、15件)の実現効用はすべて0以上(成立)。\n- 権力集中の不在(#14): ⑤構造検証(全4項目)がすべてPass。フレームワーク統合(LangGraph、CLAUDE.md 7章): Pass — State型は`EnvironmentClient`参照のみを持ち、申告・集計結果は1ラウンド限りの一時値として扱う(蓄積履歴を複製しない)。ノード(collect_rankings=④/aggregate=③/record=①)の実行順序どおりに動作し(確認)、壁(自領域のみ書き込み)も迂回されない(確認)。D-21/D-22から持ち越されたギャップをここで解消。\n\n### ②収束性: 1回性エンジンにつきMDP適用対象外(SMAS_theorymap.md 2.1節、ケース1と同じ)\n- 決定論性・局所-大域整合(#8): ②誘因構造エンジンは純関数(同一の申告集合→同一の勝者)であり、各エージェントのローカル計算は自明に一致する。\n- 収束性そのもの(#17): 代替評価として③頑健性(モンテカルロ)を参照。\n\n### ③頑健性: モンテカルロ N=200試行、埋葬戦術が得になった試行数=16(8.0%) — **非ゼロが理論どおりの想定内の結果**\n- 誘因整合性(#1)・耐戦略性(#2): **満たさない(意図的)**。具体例(bob、埋葬戦術の合計効用: 埋葬=+50.00 / 正直(反実仮想)=+30.00)で埋葬戦術が明確に得をした(得をした)。モンテカルロでも8.0%の試行で埋葬戦術が得になった。ボルダ得点は`mechanism_catalog.md`ファミリー2表で「戦術的な順位操作が可能」と明記された非耐戦略性メカニズムであり、これは設計の欠陥ではなく**意図した実証結果**(D-27)。\n- 集約の操作耐性(#9): 上記のとおり満たさない。⑤検証層(DisCoPy)は「層をまたぐ接続の整合性」のみを見る(CLAUDE.md 2章 原則5)ため、この種の操作耐性の欠如自体はDisCoPyの対象外であり、モンテカルロ(実証的検証)が代わりに検出する役割を担う(verification_layer_clarification.md)。\n- 打ち切り耐性(#23): 2シーン構成の全10ラウンドでフォールバックに落ちず完走(確認済み)。\n- **結託耐性(#5、D-39で初めて検証)**: **満たさない**。D-29(3候補では単独の埋葬戦術は最善でも同点にしかならない)を踏まえ、「2人の結託なら3候補でもクリーンな逆転を起こせるか」を`pygambit`で検証した。alice/carol/erinが候補Aを一貫して支持、bob/daveが候補Bを真に選好する構成で、bob単独の埋葬は同点止まり(honest=Aが有効なタイブレークで勝つ)だが、bob+daveが結託して2人とも埋葬すると、honest(合計効用12.0)を上回る新しい均衡(合計効用20.0、候補Bが明確に勝つ)が生まれることを確認した。この均衡はサイドペイメント無しでも双方にとって厳密に有利な(indifferenceではない)強い均衡であり、VCGの結託(D-33、非ピボットな無差別による弱い均衡)よりも顕著な結託インセンティブを持つ。\n\n### ④資源コスト: 計算量・実行時間の概算(このマシンでの1回計測、参考値)\n- ボルダ集計(単発呼び出し、申告3件×候補4件): 実測 0.15 ms\n- 2シーン構成(scene1×5, scene2×5): 実測 3.646 秒\n- モンテカルロ N=200試行: 実測 0.022 秒\n- pygambit結託耐性チェック(2×2戦略の純戦略ナッシュ均衡列挙): 実測 0.72 ms\n- ⑤DisCoPy構造検証: 実測 0.67 ms\n- 資源コスト(#24): 分散台帳・検証可能遅延関数等の本番運用コストは技術選定が未決のため対象外。\n\n### ⑤検証可能性: DisCoPy Pass / Quint Pass(シミュレーション、網羅的証明ではない) — `quint run`(300サンプル、safety不変条件: ラウンドの実行フェーズがidle/collecting/aggregating/recordedのいずれかに収まる)で違反なし。Apalache(SMT、安全性)・TLC(公平性を伴う活性: 「ラウンドはいつか必ずrecordedに達する」)による網羅的検証は、ケース1・2(D-19)と同じ環境のツールチェイン不具合により未実施。`.qnt`はtypecheck済みで、環境を修復すれば`cases\\proposal_voting\\quint\\proposal_voting.qnt`の再実行のみで足りる。\n- 合成則の充足(#13): 結合律・単位律を含む構造検証、4項目中4項目Pass。\n  - boundary_type_match: Pass\n  - associativity: Pass\n  - unitality: Pass\n  - absence_of_concentrated_power: Pass\n- 関手による対応づけ(#15): ケース1・2からの型の対応づけを確認済み。IncentiveEngine/AllocationResult/VersionedMechanismは無変更のまま満たす。Declaration/ActionOutputのみ、declared_ranking(順位申告)という新フィールドを追加した(既存フィールドは変更せず、後方互換の追加、CLAUDE.md 11章の変更理由明記)。ケース2(A側変更ゼロ)ほどではないが、3ケース目にして初めての、必然性のあるA側拡張だった。\n- 並行安全性(#16)・打ち切り耐性(#23)の形式的側面: Pass(シミュレーション、網羅的証明ではない) — `quint run`(300サンプル、safety不変条件: ラウンドの実行フェーズがidle/collecting/aggregating/recordedのいずれかに収まる)で違反なし。Apalache(SMT、安全性)・TLC(公平性を伴う活性: 「ラウンドはいつか必ずrecordedに達する」)による網羅的検証は、ケース1・2(D-19)と同じ環境のツールチェイン不具合により未実施。`.qnt`はtypecheck済みで、環境を修復すれば`cases\\proposal_voting\\quint\\proposal_voting.qnt`の再実行のみで足りる。\n\n## 5大指標に対応表がない評価観点(補足)\n\n- プラガブル性(#11): Pass — HonestVotingAgent/BuryingStrategicAgent(ケース3固有、順位申告用に新設)は共通のAgentプロトコル(schemas/agent_schema.py)を満たす。全く異なる申告の「形」(数値→順位)を持つメカニズムでも、④実行主体層のプロトコル自体は変更不要だった。\n\n---\n\n**限界の明記**: ③頑健性のモンテカルロは、本スクリプトが定義した埋葬戦術(真の2位候補を最下位に落とす、単純な固定ルール)への非耐戦略性のみを確認する。他の操作戦略(妥協投票・連合的操作等)への一般化は主張しない。⑤検証可能性のQuintは、安全性不変条件のシミュレーション(有限サンプル)による経験的確認に留まり、Apalache・TLCによる網羅的な形式検証ではない(環境のツールチェイン不具合による、docs/DECISIONS.md D-19)。\n",
+    "liquid_democracy": "# 4ケース目(Liquid Democracy・委任民主主義) 検証結果サマリー\n\n生成日時(UTC): 2026-07-22T14:21:34+00:00\n生成コマンド: `python cases/liquid_democracy/generate_results_summary.py`\n\nCLAUDE.md 10章の運用ルールに従い、5大指標を主役として記載する。\n25項目評価観点(docs/evaluation_criteria.md)は各指標の根拠として番号付きで1行併記する。\n\n**このケースの狙い(D-30)**: ケース1〜3はいずれも「1エージェントの逸脱・操作」という筋書きだった。このケースは委任構造そのもの(循環委任・重みの保存則・権力集中の性質の違い)に主眼を置く。集計方式はあえて二択・単純多数決(それ自体は耐戦略性を満たす)を選び、集計方式の操作可能性(ケース3で実証済み)と論点を混同しない。評価観点#19(委任連鎖を通した誘因構造の伝播の妥当性)を、プロジェクト開始以来初めて実地検証する。\n\n## 5大指標\n\n### ①到達可能性: Yes\n- 個人合理性(#25): 支払いが発生しないメカニズムのため、実現効用は構造的に常に0以上(勝った選択肢を支持していれば正の効用、そうでなければ0)。\n- 権力集中の不在(#14、定義の再検討): シーン3(スーパー代理人)でpriyaに4人が委任し、重みが5に集約された。ただしこれは各委任者が自発的に選んだ結果であり、公開痕跡(process_trace)により誰でも監査可能(確認)、かつ次ラウンドで委任先を自由に変更できる。「1主体が他者の運命を一方的に決める」という#14本来の懸念(同意なき権力集中)とは性質が異なり、⑤構造検証(全4項目)はすべてPass。\n\n### ②収束性: 1回性エンジンにつきMDP適用対象外(SMAS_theorymap.md 2.1節、ケース1・3と同じ)\n- 委任連鎖を通した誘因構造の伝播の妥当性(#19、初検証): シーン1で、全員が忠実に委任した場合の集計結果(合致)と、委任なしで各人が直接投票した場合(反実仮想)の集計結果を比較し、一致することを確認した。委任を経由しても各人の真の選好の反映(誘因構造)が劣化しないことの、最も文字通りの実証。\n- 決定論性・局所-大域整合(#8): 重みの保存則(有効票+無効票の合計=参加者数)がシーン1(成立)・シーン2(成立)のいずれでも成立。②誘因構造エンジンは純関数であり、各エージェントのローカル計算は自明に一致する。\n\n### ③頑健性: モンテカルロ N=500試行(ランダムな委任グラフ、循環を含む)、重みの保存則が成立した試行数=500(100.0%)\n- **このケースの③頑健性は、ケース3(戦略的操作の成功率)とは異なる軸を測る**: 集計方式(二択単純多数決)自体は耐戦略性を満たす設計のため、ここでは「委任構造がランダム・敵対的な配線(循環を含む)に対して構造的に頑健か」(例外なく停止し、重みの保存則を常に満たすか)を測る。誘因整合性・耐戦略性の直接検証はケース3の役割。\n- **本チェックの限界(D-31)**: 「重みの保存則100%」は、resolve_delegationsが全申告者に必ず何らかの値を設定する実装である以上、ほぼ自明に成立する指標であり、深い経験的発見ではない。真に非自明な主張は「循環・深さ上限があっても例外や無限ループが起きない」ことであり、こちらがモンテカルロの実質的な価値になる。なお実装当初、実在しない委任先(誤字等)がresolvedに紛れ込み保存則が壊れる実バグがあり、修正済み(D-31)。\n- 打ち切り耐性(#23): シーン2(循環委任の注入)で解決が例外なく停止し(確認)、循環に含まれるfrank/grace/heidiの票が正しく無効化され、他者(alice/bob)の票には影響しなかった(確認)。モンテカルロでも104/500試行で循環等による無効票が発生したが、いずれも例外なく解決が停止した。\n- **結託耐性(#5、D-39で保留した項目をD-48で決着)**: **満たす**。3対1で反対票が優勢な構成(alice/carol/erinが\"no\"固定、frankが\"yes\"固定)で、残り2人(bob/dave)の結託を`pygambit`で検証した。純戦略ナッシュ均衡は5個見つかったが(yes/yes, no/no, void/no, no/void, void/void)、いずれも正直な戦略(honest、合計効用2.0)を上回らない(最良の均衡でも合計効用2.0)。各エージェントが最終的に寄与できる票数は直接投票・委任のいずれでも最大1票(委任は既存の1票を中継するだけで複製しない)であり、虚偽の投票・自己委任による棄権のいずれも自分が望む選択肢への寄与を1票より増やせないため、正直な投票が常に弱支配戦略になる——二択単純多数決という集計方式自体の性質(D-30)に加え、委任という仕組みを組み合わせても結託の余地が生まれないことを、初めて具体的に確認した。\n\n### ④資源コスト: 計算量・実行時間の概算(このマシンでの1回計測、参考値)\n- シーン1(平常時、5エージェント): 実測 0.12 ms\n- シーン2(循環委任、5エージェント): 実測 0.06 ms\n- シーン3(スーパー代理人、6エージェント): 実測 0.06 ms\n- モンテカルロ N=500試行(6エージェント、ランダム委任グラフ): 実測 0.008 秒\n- pygambit結託耐性チェック(3×3戦略の純戦略ナッシュ均衡列挙): 実測 0.89 ms\n- ⑤DisCoPy構造検証: 実測 0.68 ms\n- 資源コスト(#24): 分散台帳・検証可能遅延関数等の本番運用コストは技術選定が未決のため対象外。\n\n### ⑤検証可能性: DisCoPy Pass / Quint Pass(シミュレーション、網羅的証明ではない) — `quint run`(300サンプル、safety不変条件: 委任連鎖を辿った回数が[0, MAX_DEPTH]に収まり、statusがfollowing/resolved/voidedのいずれかに収まる)で違反なし。Apalache(SMT、安全性)・TLC(公平性を伴う活性: 「委任の解決はいつか必ずresolvedかvoidedで終わる」)による網羅的検証は、ケース1〜3(D-19)と同じ環境のツールチェイン不具合により未実施。`.qnt`はtypecheck済みで、環境を修復すれば`cases\\liquid_democracy\\quint\\liquid_democracy.qnt`の再実行のみで足りる。\n- 合成則の充足(#13): 結合律・単位律を含む構造検証、4項目中4項目Pass。\n  - boundary_type_match: Pass\n  - associativity: Pass\n  - unitality: Pass\n  - absence_of_concentrated_power: Pass\n- 関手による対応づけ(#15): ケース1〜3からの型の対応づけを確認済み。IncentiveEngine/AllocationResult/VersionedMechanismは無変更のまま満たす。Declaration/ActionOutputにdelegate_to(委任先)という新フィールドを追加した(既存フィールドは変更せず、後方互換の追加)。ケース3のdeclared_rankingに続き2ケース連続のA側拡張であり、CLAUDE.md 11章の「頻度が増えたら危険信号」チェックの対象として明示的に記録する(D-30)。\n- 並行安全性(#16)・打ち切り耐性(#23)の形式的側面: Pass(シミュレーション、網羅的証明ではない) — `quint run`(300サンプル、safety不変条件: 委任連鎖を辿った回数が[0, MAX_DEPTH]に収まり、statusがfollowing/resolved/voidedのいずれかに収まる)で違反なし。Apalache(SMT、安全性)・TLC(公平性を伴う活性: 「委任の解決はいつか必ずresolvedかvoidedで終わる」)による網羅的検証は、ケース1〜3(D-19)と同じ環境のツールチェイン不具合により未実施。`.qnt`はtypecheck済みで、環境を修復すれば`cases\\liquid_democracy\\quint\\liquid_democracy.qnt`の再実行のみで足りる。\n\n## 5大指標に対応表がない評価観点(補足)\n\n- プラガブル性(#11): Pass — DirectVotingAgent/DelegatingAgent(ケース4固有、委任申告用に新設)は共通のAgentプロトコル(schemas/agent_schema.py)を満たす。全く異なる申告の「形」(数値→順位→委任先)を持つメカニズムでも、④実行主体層のプロトコル自体は変更不要だった(3ケース連続で確認)。\n\n---\n\n**限界の明記**: ③頑健性のモンテカルロは、本スクリプトが定義したランダム委任グラフ(50%直接投票/50%ランダム委任)への構造的頑健性のみを確認する。悪意を持って構成された委任グラフ(多数の相互リンクした循環等)への一般化は主張しない。⑤検証可能性のQuintは、安全性不変条件のシミュレーション(有限サンプル)による経験的確認に留まり、Apalache・TLCによる網羅的な形式検証ではない(環境のツールチェイン不具合による、docs/DECISIONS.md D-19)。\n"
+  };
+  /* REPORTS_DATA_END */
+
+  var reportCases = [
+    { id: "task_allocation", label: "①タスク配分" },
+    { id: "credit_allocation", label: "②信用枠配分" },
+    { id: "proposal_voting", label: "③投票" },
+    { id: "liquid_democracy", label: "④Liquid Democracy" },
+  ];
+  var currentReportCase = reportCases[0].id;
+
+  function escapeHtml(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function renderMarkdown(md) {
+    var lines = md.split("\n");
+    var html = "";
+    var inList = false;
+    lines.forEach(function (line) {
+      var listMatch = line.match(/^(\s*)-\s+(.*)$/);
+      if (listMatch) {
+        if (!inList) { html += "<ul>"; inList = true; }
+        html += "<li>" + inlineMd(listMatch[2]) + "</li>";
+        return;
+      }
+      if (inList) { html += "</ul>"; inList = false; }
+      if (/^---+$/.test(line.trim())) { html += "<hr>"; return; }
+      var h = line.match(/^(#{1,3})\s+(.*)$/);
+      if (h) {
+        var level = h[1].length;
+        html += "<h" + level + ">" + inlineMd(h[2]) + "</h" + level + ">";
+        return;
+      }
+      if (line.trim() === "") { return; }
+      html += "<p>" + inlineMd(line) + "</p>";
+    });
+    if (inList) { html += "</ul>"; }
+    return html;
+  }
+
+  function inlineMd(text) {
+    var escaped = escapeHtml(text);
+    escaped = escaped.replace(/`([^`]+)`/g, "<code>$1</code>");
+    escaped = escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    return escaped;
+  }
+
+  function renderReportCasePicker() {
+    var picker = document.getElementById("report-case-picker");
+    picker.innerHTML = "";
+    reportCases.forEach(function (c) {
+      var btn = document.createElement("button");
+      btn.className = "case-btn" + (c.id === currentReportCase ? " active" : "");
+      btn.textContent = c.label;
+      btn.addEventListener("click", function () { currentReportCase = c.id; renderReportBody(); renderReportCasePicker(); });
+      picker.appendChild(btn);
+    });
+  }
+
+  function renderReportBody() {
+    var body = document.getElementById("report-body");
+    var md = REPORTS[currentReportCase];
+    body.innerHTML = md ? renderMarkdown(md) : "<p>(未生成: visualize/embed_reports.py を実行してください)</p>";
+  }
+
+  renderReportCasePicker();
+  renderReportBody();
 
   // ---------------- tabs ----------------
   var tabs = document.querySelectorAll(".tab");
