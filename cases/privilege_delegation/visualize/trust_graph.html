@@ -18,6 +18,8 @@
     --edge: #b7b0a1;
     --edge-active: #b8860f;
     --edge-new: #a6472e;
+    --accent-origin: #3a6ea8;
+    --accent-origin-bg: #dde7f2;
     --shadow: 0 1px 2px rgba(35,33,29,0.06), 0 8px 24px rgba(35,33,29,0.06);
     --font-display: -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
     --font-mono: ui-monospace, "Cascadia Code", "SF Mono", "Consolas", "Menlo", monospace;
@@ -40,6 +42,8 @@
     --edge: #3d414c;
     --edge-active: #e8bc4e;
     --edge-new: #ff8f6b;
+    --accent-origin: #7ba7d9;
+    --accent-origin-bg: #1c2c3d;
     --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
   }
   @media (prefers-color-scheme: dark) {
@@ -61,6 +65,8 @@
       --edge: #3d414c;
       --edge-active: #e8bc4e;
       --edge-new: #ff8f6b;
+      --accent-origin: #7ba7d9;
+      --accent-origin-bg: #1c2c3d;
       --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
     }
   }
@@ -88,6 +94,7 @@
   .node.state-active circle { fill: var(--accent-active-bg); stroke: var(--accent-active); stroke-width: 2.4; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent-active) 55%, transparent)); }
   .node.state-safe circle { fill: var(--accent-safe-bg); stroke: var(--accent-safe); stroke-width: 2.2; }
   .node.state-danger circle { fill: var(--accent-danger-bg); stroke: var(--accent-danger); stroke-width: 2.6; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent-danger) 55%, transparent)); }
+  .node.state-origin circle { fill: var(--accent-origin-bg); stroke: var(--accent-origin); stroke-width: 3; filter: drop-shadow(0 0 9px color-mix(in srgb, var(--accent-origin) 60%, transparent)); }
 
   .node text.label { font-family: var(--font-mono); font-size: 13px; font-weight: 600; fill: var(--text); }
   .node text.role { font-family: var(--font-mono); font-size: 9.5px; fill: var(--text-faint); letter-spacing: 0.02em; }
@@ -96,6 +103,10 @@
   .node.state-danger text.tag { fill: var(--accent-danger); }
   .node.state-active text.tag { fill: var(--accent-active); }
   .node.state-idle text.tag { fill: var(--text-faint); }
+  .node.state-origin text.tag { fill: var(--accent-origin); }
+
+  .node.clickable { cursor: pointer; }
+  .node.clickable:hover circle { stroke-width: 2.6; }
 
   .edge path { fill: none; stroke: var(--edge); stroke-width: 1.6; transition: stroke 380ms ease, stroke-width 380ms ease, filter 380ms ease; marker-end: url(#arrow); }
   .edge.active path { stroke: var(--edge-active); stroke-width: 2.6; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--edge-active) 60%, transparent)); marker-end: url(#arrow-active); }
@@ -110,6 +121,7 @@
   .swatch.active { background: var(--accent-active-bg); border-color: var(--accent-active); }
   .swatch.idle { background: var(--panel-2); border-color: var(--edge); }
   .swatch.new { background: var(--panel-2); border-color: var(--edge-new); border-style: dashed; }
+  .swatch.origin { background: var(--accent-origin-bg); border-color: var(--accent-origin); }
 
   .side { display: flex; flex-direction: column; gap: 14px; }
 
@@ -155,6 +167,18 @@
   table.chokepoint tr.rank-1 td.rank-num { color: var(--accent-danger); }
   table.chokepoint td.edge-cell { color: var(--text); }
   .chokepoint-footnote { font-size: 11px; color: var(--text-faint); line-height: 1.5; margin: 8px 0 0; }
+
+  .blast-box { padding: 14px 16px; border-top: 1px solid var(--border); }
+  .blast-box h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin: 0 0 6px; font-weight: 650; }
+  .blast-hint { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0; }
+  .blast-result { display: none; }
+  .blast-result-row { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .blast-result-row:last-child { border-bottom: none; }
+  .blast-result-row .k { color: var(--text-muted); }
+  .blast-result-row .v { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .blast-pill { display: inline-flex; align-items: center; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
+  .blast-pill.ok { background: var(--accent-safe-bg); color: var(--accent-safe); }
+  .blast-pill.bad { background: var(--accent-danger-bg); color: var(--accent-danger); }
 
   @media (prefers-reduced-motion: reduce) {
     .node circle, .edge path { transition-duration: 1ms !important; }
@@ -235,6 +259,7 @@
         <span class="legend-item"><span class="swatch safe"></span>意図された上限内</span>
         <span class="legend-item"><span class="swatch danger"></span>権限昇格(上限超過)</span>
         <span class="legend-item"><span class="swatch new"></span>シーン2で追加された宣言</span>
+        <span class="legend-item"><span class="swatch origin"></span>侵害されたと仮定したエージェント</span>
         <span class="legend-item">矢印: assumeできる方向(なりすませる側→なりすまされる側。trustを宣言したのは矢印の<b>先</b>)</span>
       </div>
     </div>
@@ -269,6 +294,31 @@
             * 解消件数 = このedge(trust宣言)を1件だけ取り除いた場合に、権限昇格状態から
             抜けるエージェントの数。
           </p>
+        </div>
+        <div class="blast-box">
+          <h2>blast radius探索</h2>
+          <p class="blast-hint" id="blast-hint">
+            グラフ上のノードをクリックすると、そのエージェントの資格情報が今まさに
+            侵害されたと仮定した場合の被害範囲(blast radius)を表示する。
+          </p>
+          <div class="blast-result" id="blast-result">
+            <div class="blast-result-row">
+              <span class="k">侵害されたと仮定</span><span class="v" id="blast-origin"></span>
+            </div>
+            <div class="blast-result-row">
+              <span class="k">到達範囲</span><span class="v" id="blast-reachable"></span>
+            </div>
+            <div class="blast-result-row">
+              <span class="k">到達最大tier</span><span class="v" id="blast-tier"></span>
+            </div>
+            <div class="blast-result-row">
+              <span class="k">意図された上限を超過?</span>
+              <span class="v"><span class="blast-pill" id="blast-exceeds-pill"></span></span>
+            </div>
+            <div class="blast-result-row">
+              <span class="k">想定外の被害範囲</span><span class="v" id="blast-exposure"></span>
+            </div>
+          </div>
         </div>
         <div class="source">
           入力: <code>ci_svc.delegate_to="build_svc", deploy_svc.delegate_to="ci_svc"</code>
@@ -310,9 +360,25 @@
     { truster: "deploy_svc", trusted: "ci_svc", resolved: 0, excessReduced: 0 }
   ];
 
+  // analysis.compute_blast_radius()を実際に5エージェント全員について実行した結果
+  // (smoke_test.py・generate_results_summary.pyと同じシーン2設定、D-70で検証済み)。
+  var blastRadiusData = {
+    intern_svc: { reachable: ["intern_svc"], maxTier: 0, intended: 0, exceeds: false, exposure: [] },
+    build_svc: { reachable: ["admin", "deploy_svc", "build_svc", "ci_svc"], maxTier: 3, intended: 2, exceeds: true, exposure: ["admin"] },
+    ci_svc: { reachable: ["admin", "deploy_svc", "ci_svc"], maxTier: 3, intended: 2, exceeds: true, exposure: ["admin"] },
+    deploy_svc: { reachable: ["deploy_svc"], maxTier: 2, intended: 2, exceeds: false, exposure: [] },
+    admin: { reachable: ["admin"], maxTier: 3, intended: 3, exceeds: false, exposure: [] }
+  };
+  var edgeEndpoints = {
+    "build_svc-ci_svc": ["build_svc", "ci_svc"],
+    "ci_svc-deploy_svc": ["ci_svc", "deploy_svc"],
+    "ci_svc-admin": ["ci_svc", "admin"]
+  };
+
   var nodeIds = ["intern_svc", "build_svc", "ci_svc", "deploy_svc", "admin"];
   var edgeIds = ["build_svc-ci_svc", "ci_svc-deploy_svc", "ci_svc-admin"];
   var current = 0;
+  var blastOrigin = null; // クリックで選んだ「侵害されたと仮定するエージェント」
 
   var logEl = document.getElementById("log");
   var stepCountEl = document.getElementById("step-count");
@@ -321,9 +387,48 @@
   var chokepointBodyEl = document.getElementById("chokepoint-body");
   var chokepointHintEl = document.getElementById("chokepoint-hint");
   var chokepointFootnoteEl = document.getElementById("chokepoint-footnote");
+  var blastHintEl = document.getElementById("blast-hint");
+  var blastResultEl = document.getElementById("blast-result");
 
   function nodeEl(id) { return document.querySelector('.node[data-node="' + id + '"]'); }
   function edgeEl(id) { return document.querySelector('.edge[data-edge="' + id + '"]'); }
+
+  function renderBlastRadius(originId) {
+    var data = blastRadiusData[originId];
+    var reachableSet = {};
+    data.reachable.forEach(function (a) { reachableSet[a] = true; });
+    var exposureSet = {};
+    data.exposure.forEach(function (a) { exposureSet[a] = true; });
+
+    nodeIds.forEach(function (id) {
+      var el = nodeEl(id);
+      var cls, tag;
+      if (id === originId) { cls = "state-origin"; tag = "侵害"; }
+      else if (exposureSet[id]) { cls = "state-danger"; tag = "被害"; }
+      else if (reachableSet[id]) { cls = "state-safe"; tag = "到達"; }
+      else { cls = "state-idle"; tag = "—"; }
+      el.setAttribute("class", "node clickable " + cls);
+      el.querySelector(".tag").textContent = tag;
+    });
+
+    edgeIds.forEach(function (id) {
+      var endpoints = edgeEndpoints[id];
+      var bothReachable = reachableSet[endpoints[0]] && reachableSet[endpoints[1]];
+      var el = edgeEl(id);
+      el.setAttribute("class", bothReachable ? "edge active" : "edge");
+    });
+
+    document.getElementById("blast-origin").textContent = originId;
+    document.getElementById("blast-reachable").textContent = data.reachable.join(", ");
+    document.getElementById("blast-tier").textContent = data.maxTier + "(意図された上限=" + data.intended + ")";
+    var pill = document.getElementById("blast-exceeds-pill");
+    pill.className = "blast-pill " + (data.exceeds ? "bad" : "ok");
+    pill.textContent = data.exceeds ? "YES" : "NO";
+    document.getElementById("blast-exposure").textContent = data.exposure.length ? data.exposure.join(", ") : "なし";
+
+    blastHintEl.style.display = "none";
+    blastResultEl.style.display = "";
+  }
 
   function render() {
     // reset
@@ -406,10 +511,20 @@
           '<td>' + row.excessReduced + '</td>';
         chokepointBodyEl.appendChild(tr);
       });
+      // 最終ステップに到達したら、全ノードをクリック可能にする(blast radius探索)
+      nodeIds.forEach(function (id) { nodeEl(id).classList.add("clickable"); });
+      if (blastOrigin) {
+        renderBlastRadius(blastOrigin);
+      } else {
+        blastHintEl.style.display = "";
+        blastResultEl.style.display = "none";
+      }
     } else {
       chokepointHintEl.style.display = "";
       chokepointTableEl.style.display = "none";
       chokepointFootnoteEl.style.display = "none";
+      blastHintEl.style.display = "";
+      blastResultEl.style.display = "none";
     }
 
     document.getElementById("btn-prev").disabled = current === 0;
@@ -417,13 +532,21 @@
   }
 
   document.getElementById("btn-next").addEventListener("click", function () {
-    if (current < steps.length - 1) { current++; render(); }
+    if (current < steps.length - 1) { current++; blastOrigin = null; render(); }
   });
   document.getElementById("btn-prev").addEventListener("click", function () {
-    if (current > 0) { current--; render(); }
+    if (current > 0) { current--; blastOrigin = null; render(); }
   });
   document.getElementById("btn-reset").addEventListener("click", function () {
-    current = 0; render();
+    current = 0; blastOrigin = null; render();
+  });
+
+  nodeIds.forEach(function (id) {
+    nodeEl(id).addEventListener("click", function () {
+      if (!steps[current].final) return; // 最終ステップに到達するまでは探索不可
+      blastOrigin = id;
+      render();
+    });
   });
 
   render();
