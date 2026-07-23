@@ -64,14 +64,16 @@ def main() -> None:
         Declaration(agent_id="transport"),
         Declaration(agent_id="dining"),
     ]
-    held = engine.resolve_reachable_budgets(basic_declarations)
+    net = engine.resolve_reachable_budgets(basic_declarations)
     check(
-        "②誘因構造層: bookingは委任どおり45000円を保有する",
-        held["booking"] == 45000.0,
+        "②誘因構造層: bookingの手元にはme(45000円)から受け取り、transportへの"
+        "委任(2000円)を差し引いた43000円が残る(委任元の残高は委任した分だけ"
+        "減る、保存的モデル)",
+        net["booking"] == 43000.0,
     )
     check(
-        "②誘因構造層: transportは委任どおり2000円を保有する",
-        held["transport"] == 2000.0,
+        "②誘因構造層: transportは委任どおり2000円を手元に残す(それ以上は委任しない)",
+        net["transport"] == 2000.0,
     )
     outcome = engine.allocate_and_pay(basic_declarations)
     check("②誘因構造層: 平常時の委任構成では想定外の決済余地が発生しない", outcome.allocated_agent_ids == [])
@@ -90,7 +92,13 @@ def main() -> None:
         over_held["transport"] == 45000.0,
     )
 
-    # --- ②誘因構造層: 循環委任(相互委任)でもクラッシュせず、有限値に収束する -------
+    # --- ②誘因構造層: 循環委任(相互委任)でもクラッシュせず、金額を水増ししない -------
+    # D-78の議論: 当初「委任元の残高は減らない」実装ミスがあり、循環委任(x⇄y)が
+    # xの保有額を100→120に水増しする「キックバック」という見かけ上の発見を生んで
+    # いた。真に保存的な実装(委任元の残高は委任した分だけ減る)に修正した結果、
+    # 循環委任は金額を水増ししない(circular round-tripping扱い、循環edgeには
+    # 金額を流さない)ことを確認する。循環そのものは、金額の異常ではなく構造的な
+    # リスクとして find_cyclic_agents で別途検出する。
     cycle_params = PartialDelegationParameters(
         root_budgets={"x": 100.0, "y": 0.0},
         intended_max_budget={"x": 100.0, "y": 60.0},
@@ -101,16 +109,21 @@ def main() -> None:
         Declaration(agent_id="x", delegate_to="y", declared_value=60.0),
         Declaration(agent_id="y", delegate_to="x", declared_value=20.0),
     ]
-    cycle_held = cycle_engine.resolve_reachable_budgets(cycle_declarations)
+    cyclic_agents = cycle_engine.find_cyclic_agents(cycle_declarations)
     check(
-        "②誘因構造層: 循環委任(xとyが相互に一部を委任)でも無限ループにならず有限値に収束する",
-        cycle_held == {"x": 120.0, "y": 60.0},
+        "②誘因構造層: 循環委任(xとyが相互に一部を委任)は構造的リスクとして検出される",
+        cyclic_agents == {"x", "y"},
+    )
+    cycle_net = cycle_engine.resolve_reachable_budgets(cycle_declarations)
+    check(
+        "②誘因構造層: 循環委任は金額を水増ししない(循環edgeには金額を流さないため、"
+        "xの手元はroot_budgetsどおり100のまま、yは委任を一切受け取れず0のまま)",
+        cycle_net == {"x": 100.0, "y": 0.0},
     )
     check(
-        "②誘因構造層(発見): 循環委任の「キックバック」により、xの保有額(120)が"
-        "x自身のintended_max_budget(100)を超える(xは誰からも虚偽の金額を"
-        "受け取っていないのに、相互委任の合成だけで自分の本来の上限を超えてしまう)",
-        cycle_engine.allocate_and_pay(cycle_declarations).allocated_agent_ids == ["x"],
+        "②誘因構造層: 循環委任があっても想定外の決済余地(金額の超過)としては検出されない"
+        "(構造的リスクとして別枠で検出済みのため、金額チェックと二重計上しない)",
+        cycle_engine.allocate_and_pay(cycle_declarations).allocated_agent_ids == [],
     )
 
     # --- ⑤検証層: DisCoPyによる合成則チェック(共通実装) ------------------------------
