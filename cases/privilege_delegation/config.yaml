@@ -1,0 +1,25 @@
+environment:
+  half_life_rounds: 8.0
+  max_trace_age_rounds: 50
+
+aggregation:
+  max_iterations: 1
+  timeout_seconds: 5.0
+
+mechanism:
+  tiers:
+    admin: 3
+    deploy_svc: 2
+    ci_svc: 1
+    build_svc: 1
+    intern_svc: 0
+  intended_max_tier:
+    admin: 3
+    deploy_svc: 2
+    ci_svc: 2
+    build_svc: 2
+    intern_svc: 0
+  max_chain_depth: 10
+
+verification_kit:
+  monte_carlo_trials: 500
