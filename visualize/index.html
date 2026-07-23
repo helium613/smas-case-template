@@ -1,0 +1,148 @@
+<title>SMAS 可視化インデックス</title>
+<style>
+  :root {
+    --bg: #f3f1ec; --panel: #ffffff; --panel-2: #ece9e2; --border: #d8d3c8;
+    --text: #23211d; --text-muted: #6b6558; --text-faint: #a29c8c;
+    --accent-active: #b8860f; --accent-active-bg: #f7ecd0;
+    --shadow: 0 1px 2px rgba(35,33,29,0.06), 0 8px 24px rgba(35,33,29,0.06);
+    --font-display: -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", "Consolas", "Menlo", monospace;
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161b; --panel: #1b1e25; --panel-2: #21242c; --border: #2e323c;
+    --text: #e9e6de; --text-muted: #97917f; --text-faint: #6b6658;
+    --accent-active: #e8bc4e; --accent-active-bg: #382d13;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161b; --panel: #1b1e25; --panel-2: #21242c; --border: #2e323c;
+      --text: #e9e6de; --text-muted: #97917f; --text-faint: #6b6658;
+      --accent-active: #e8bc4e; --accent-active-bg: #382d13;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-display); padding: 32px; }
+  .wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 26px; }
+
+  header { display: flex; flex-direction: column; gap: 6px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); }
+  h1 { font-size: 26px; font-weight: 650; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .sub { color: var(--text-muted); font-size: 14px; max-width: 68ch; line-height: 1.55; margin: 2px 0 0; }
+  .sub code { font-family: var(--font-mono); font-size: 12.5px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+
+  section.group { display: flex; flex-direction: column; gap: 10px; }
+  .group-title { font-family: var(--font-mono); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); font-weight: 650; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  a.card {
+    display: flex; flex-direction: column; gap: 6px; padding: 14px 16px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow); text-decoration: none; color: inherit;
+    transition: border-color 150ms ease, transform 80ms ease;
+  }
+  a.card:hover { border-color: var(--accent-active); }
+  a.card:active { transform: translateY(1px); }
+  a.card:focus-visible { outline: 2px solid var(--accent-active); outline-offset: 2px; }
+  .card-title { font-size: 14.5px; font-weight: 650; }
+  .card-path { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); word-break: break-all; }
+  .card-desc { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+
+  .note { padding: 14px 16px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); font-size: 12.5px; color: var(--text-muted); line-height: 1.6; }
+  .note code { font-family: var(--font-mono); font-size: 11.5px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">SMAS — visualize/index.html</span>
+    <h1>可視化プロトタイプ一覧</h1>
+    <p class="sub">
+      リポジトリ内の全HTML可視化への入り口。各ケース固有の可視化(<code>cases/&lt;ケース名&gt;/visualize/</code>)と、
+      ケース横断の可視化(<code>visualize/</code>)をここから辿れる。
+    </p>
+  </header>
+
+  <section class="group">
+    <div class="group-title">ケース横断</div>
+    <div class="cards">
+      <a class="card" href="cross_case.html">
+        <span class="card-title">ケース横断ダッシュボード</span>
+        <span class="card-path">visualize/cross_case.html</span>
+        <span class="card-desc">5大指標×4ケースの一覧、実行主体層別ダッシュボード、評価観点25項目、レポート全文ビューア(4タブ構成)。</span>
+      </a>
+      <a class="card" href="incentive_gradient.html">
+        <span class="card-title">インセンティブ勾配(制度の穴マップ)</span>
+        <span class="card-path">visualize/incentive_gradient.html</span>
+        <span class="card-desc">申告値をずらした時の効用カーブ。ケース1(VCG)・ケース2(信用枠配分)の平坦なプラトー/崖を可視化。</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="group">
+    <div class="group-title">ケース1 — タスク配分(VCG)</div>
+    <div class="cards">
+      <a class="card" href="../cases/task_allocation/visualize/scenario_timeline.html">
+        <span class="card-title">シーンの推移</span>
+        <span class="card-path">cases/task_allocation/visualize/scenario_timeline.html</span>
+        <span class="card-desc">carolの申告値と累積効用(実際 vs 反実仮想)のラウンドごとの推移。逸脱は得にならないことを再生する。</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="group">
+    <div class="group-title">ケース2 — 信用枠配分(トリガー戦略)</div>
+    <div class="cards">
+      <a class="card" href="../cases/credit_allocation/visualize/scenario_timeline.html">
+        <span class="card-title">シーンの推移(シナリオ切替対応)</span>
+        <span class="card-path">cases/credit_allocation/visualize/scenario_timeline.html</span>
+        <span class="card-desc">4シーンデモ(build→deviate→punish→recover)と、信用枠内過大申告による自己永続ループの2シナリオを切替表示。</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="group">
+    <div class="group-title">ケース3 — 投票(ボルダ得点)</div>
+    <div class="cards">
+      <a class="card" href="../cases/proposal_voting/visualize/scenario_timeline.html">
+        <span class="card-title">シーンの推移</span>
+        <span class="card-path">cases/proposal_voting/visualize/scenario_timeline.html</span>
+        <span class="card-desc">bobの埋葬戦術による申告順位の操作と、累積効用(実際 vs 反実仮想)の推移。</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="group">
+    <div class="group-title">ケース4 — Liquid Democracy(委任連鎖)</div>
+    <div class="cards">
+      <a class="card" href="../cases/liquid_democracy/visualize/delegation_resolver.html">
+        <span class="card-title">委任連鎖の解決を1ステップずつ見る</span>
+        <span class="card-path">cases/liquid_democracy/visualize/delegation_resolver.html</span>
+        <span class="card-desc">直接投票・委任チェーン・循環委任の3パターンを、resolve_delegations()の解決過程としてステップ再生。</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="group">
+    <div class="group-title">ケース5 — IAM委任チェーンの権限昇格</div>
+    <div class="cards">
+      <a class="card" href="../cases/privilege_delegation/visualize/scenario_timeline.html">
+        <span class="card-title">シーンの推移</span>
+        <span class="card-path">cases/privilege_delegation/visualize/scenario_timeline.html</span>
+        <span class="card-desc">build_svcの到達可能tierと、昇格したエージェント数(実際 vs 反実仮想)のラウンドごとの推移。</span>
+      </a>
+      <a class="card" href="../cases/privilege_delegation/visualize/trust_graph.html">
+        <span class="card-title">trust連鎖の合成とchokepointランキング</span>
+        <span class="card-path">cases/privilege_delegation/visualize/trust_graph.html</span>
+        <span class="card-desc">1件のtrust宣言が既存の経路と合成され権限昇格に至る過程と、対応の優先順位(chokepointランキング)。</span>
+      </a>
+    </div>
+  </section>
+
+  <div class="note">
+    候補trust宣言の総当たりスキャン(<code>scan_candidate_trust_grants</code>、D-65)は、
+    現時点では専用の画面を持たない——<code>cases/privilege_delegation/results/summary.md</code>と
+    <code>smoke_test.py</code>の実行結果としてのみ確認できる(可視化は今後の課題)。
+  </div>
+</div>
