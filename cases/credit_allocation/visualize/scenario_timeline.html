@@ -1,4 +1,4 @@
-<title>4シーンの推移 — 信用枠配分</title>
+<title>シーンの推移 — 信用枠配分</title>
 <style>
   :root {
     --bg: #f3f1ec; --panel: #ffffff; --panel-2: #ece9e2; --border: #d8d3c8;
@@ -42,6 +42,17 @@
   .sub { color: var(--text-muted); font-size: 14px; max-width: 68ch; line-height: 1.55; margin: 2px 0 0; }
   .sub code { font-family: var(--font-mono); font-size: 12.5px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
 
+  .scenario-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+  .scenario-btn {
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+    padding: 7px 12px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text-muted); cursor: pointer;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .scenario-btn:hover { border-color: var(--accent-active); color: var(--text); }
+  .scenario-btn.active { background: var(--accent-active-bg); border-color: var(--accent-active); color: var(--accent-active); }
+  .scenario-btn:focus-visible { outline: 2px solid var(--accent-active); outline-offset: 2px; }
+
   .grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: 18px; align-items: start; }
   @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 
@@ -65,7 +76,6 @@
   .charts { padding: 14px 18px 4px; }
   .chart-label { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin: 6px 0 2px; }
   svg.chart { width: 100%; height: auto; display: block; }
-  .scene-band { }
   .gridline { stroke: var(--border); stroke-width: 1; }
   .axis-label { font-family: var(--font-mono); font-size: 9.5px; fill: var(--text-faint); }
   .line-actual { fill: none; stroke: var(--actual); stroke-width: 2.2; }
@@ -78,7 +88,6 @@
   .legend-item { display: flex; align-items: center; gap: 6px; }
   .swatch-line { width: 16px; height: 2px; border-radius: 2px; }
   .swatch-line.actual { background: var(--actual); }
-  .swatch-line.cf { background: var(--cf); border-top: 2px dashed var(--cf); background: none; height: 0; }
   .swatch-band { width: 11px; height: 11px; border-radius: 3px; }
 
   .side { display: flex; flex-direction: column; gap: 14px; }
@@ -109,13 +118,14 @@
 <div class="wrap">
   <header>
     <span class="eyebrow">SMAS — cases/credit_allocation — 可視化プロトタイプ</span>
-    <h1>4シーンの推移を、実際に発生した通りに見る</h1>
+    <h1>シーンの推移を、実際に発生した通りに見る</h1>
     <p class="sub">
-      <code>generate_results_summary.py</code> が実際に計算した、carolの信用枠(上)と
-      割引後累積効用(下)の全38ラウンドの推移。「逸脱(実際)」と「遵守を貫いた場合
-      (反実仮想)」を重ねて表示する。数値は捏造せず、実行結果をそのまま使用。
+      <code>generate_scenario_timeline_data.py</code> が実際に計算した、carolの信用枠(上)と
+      累積効用(下)のラウンドごとの推移。数値は捏造せず、実行結果をそのまま使用。
     </p>
   </header>
+
+  <div class="scenario-picker" id="scenario-picker"></div>
 
   <div class="grid">
     <div class="panel">
@@ -124,25 +134,18 @@
         <button id="btn-prev">◂ 戻る</button>
         <button id="btn-play" class="primary">▸ 再生</button>
         <button id="btn-next">次へ ▸</button>
-        <span class="round-count" id="round-count">ラウンド 0 / 38</span>
+        <span class="round-count" id="round-count"></span>
       </div>
       <div class="scrubber-wrap">
-        <input type="range" id="scrubber" min="0" max="38" value="0" step="1" aria-label="ラウンド">
+        <input type="range" id="scrubber" min="0" max="1" value="0" step="1" aria-label="ラウンド">
       </div>
       <div class="charts">
         <div class="chart-label">信用枠(credit_limit)</div>
         <svg class="chart" id="chart-credit" viewBox="0 0 760 190" xmlns="http://www.w3.org/2000/svg"></svg>
-        <div class="chart-label">割引後累積効用</div>
+        <div class="chart-label">累積効用</div>
         <svg class="chart" id="chart-utility" viewBox="0 0 760 190" xmlns="http://www.w3.org/2000/svg"></svg>
       </div>
-      <div class="legend">
-        <span class="legend-item"><span class="swatch-line actual"></span>逸脱(実際)</span>
-        <span class="legend-item"><span class="swatch-line" style="border-top:2px dashed var(--cf);height:0;width:16px;"></span>遵守を貫いた場合(反実仮想)</span>
-        <span class="legend-item"><span class="swatch-band" style="background:var(--scene-build)"></span>構築期</span>
-        <span class="legend-item"><span class="swatch-band" style="background:var(--scene-deviate)"></span>逸脱注入</span>
-        <span class="legend-item"><span class="swatch-band" style="background:var(--scene-punish)"></span>トリガー発動</span>
-        <span class="legend-item"><span class="swatch-band" style="background:var(--scene-recover)"></span>回復</span>
-      </div>
+      <div class="legend" id="legend"></div>
     </div>
 
     <div class="side">
@@ -152,12 +155,11 @@
           <div id="detail-body"></div>
         </div>
         <div class="summary">
-          <h2>最終結果(ラウンド38時点)</h2>
-          <div class="summary-row actual"><span>逸脱(実際)</span><span class="v">+37.73</span></div>
-          <div class="summary-row cf"><span>遵守を貫いた場合</span><span class="v">+53.00</span></div>
-          <div class="verdict"><b>逸脱は得にならない</b>: 制裁で信用枠が0.5まで急落し、回復にラウンドを要する間、逸脱した場合の累積効用は反実仮想を一貫して下回り続ける(D-24)。</div>
+          <h2 id="summary-title">最終結果</h2>
+          <div id="summary-body"></div>
+          <div class="verdict" id="verdict"></div>
         </div>
-        <div class="source">出典: cases/credit_allocation/generate_results_summary.py の4シーンデモ(config.yaml既定値)</div>
+        <div class="source" id="source"></div>
       </div>
     </div>
   </div>
@@ -167,34 +169,549 @@
 (function () {
   "use strict";
 
-  // generate_results_summary.py の4シーンデモを実際に実行して得た値(捏造なし)。
-  var scenes = [
-    { name: "scene1_build", label: "構築期", rounds: [1, 10], color: "var(--scene-build)" },
-    { name: "scene2_deviation_injected", label: "逸脱注入", rounds: [11, 13], color: "var(--scene-deviate)" },
-    { name: "scene3_trigger_active", label: "トリガー発動", rounds: [14, 23], color: "var(--scene-punish)" },
-    { name: "scene4_recovery", label: "回復", rounds: [24, 38], color: "var(--scene-recover)" }
-  ];
-
-  // 以下は generate_results_summary.py の4シーンデモ(config.yaml既定値)を
-  // 実際に実行して得た値をそのまま転記したもの(手計算・推測は無し)。
-  var sceneNames = ["scene1_build", "scene1_build", "scene1_build", "scene1_build", "scene1_build", "scene1_build", "scene1_build", "scene1_build", "scene1_build", "scene1_build", "scene2_deviation_injected", "scene2_deviation_injected", "scene2_deviation_injected", "scene3_trigger_active", "scene3_trigger_active", "scene3_trigger_active", "scene3_trigger_active", "scene3_trigger_active", "scene3_trigger_active", "scene3_trigger_active", "scene3_trigger_active", "scene3_trigger_active", "scene3_trigger_active", "scene4_recovery", "scene4_recovery", "scene4_recovery", "scene4_recovery", "scene4_recovery", "scene4_recovery", "scene4_recovery", "scene4_recovery", "scene4_recovery", "scene4_recovery", "scene4_recovery", "scene4_recovery", "scene4_recovery", "scene4_recovery", "scene4_recovery"];
-  var creditActual = [10.0, 11.834, 13.516, 15.058, 16.472, 17.769, 18.958, 20.049, 21.049, 21.966, 22.807, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 10.0, 11.834, 13.516, 15.058, 16.472, 17.769, 18.958, 20.049, 21.049, 21.966, 22.807, 23.578, 24.285, 24.933, 25.528];
-  var creditCf = [10.0, 11.834, 13.516, 15.058, 16.472, 17.769, 18.958, 20.049, 21.049, 21.966, 22.807, 23.578, 24.285, 24.933, 25.528, 26.073, 26.573, 27.032, 27.452, 27.838, 28.191, 28.515, 28.813, 29.085, 29.335, 29.565, 29.775, 29.968, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0];
-  var declaredActual = [8.0, 11.834, 8.0, 8.0, 15.0, 8.0, 8.0, 15.0, 8.0, 8.0, 1000.0, 1000.0, 1000.0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 8.0, 8.0, 13.516, 8.0, 8.0, 15.0, 8.0, 8.0, 15.0, 8.0, 8.0, 15.0, 8.0, 8.0, 15.0];
-  var compliantActual = [true, true, true, true, true, true, true, true, true, true, false, false, false, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true];
-  var wonActual = [false, true, false, false, true, false, false, true, false, false, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, true, false, false, true, false, false, true, false, false, true];
-  var utilActual = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 15.0, 22.2, 28.68, 28.68, 28.68, 28.68, 28.68, 28.68, 28.68, 28.68, 28.68, 28.68, 28.68, 28.68, 28.68, 31.768, 31.768, 31.768, 34.02, 34.02, 34.02, 35.661, 35.661, 35.661, 36.858, 36.858, 36.858, 37.73];
-  var utilCf = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 15.0, 15.0, 15.0, 25.935, 25.935, 25.935, 33.907, 33.907, 33.907, 39.718, 39.718, 39.718, 43.954, 43.954, 43.954, 47.043, 47.043, 47.043, 49.294, 49.294, 49.294, 50.935, 50.935, 50.935, 52.132, 52.132, 52.132, 53.004];
-
-  var N = 38;
-
-  function sceneForRound(r) {
-    for (var i = 0; i < scenes.length; i++) {
-      if (r >= scenes[i].rounds[0] && r <= scenes[i].rounds[1]) return scenes[i];
-    }
-    return scenes[0];
+  /* SCENARIOS_DATA_START (generate_scenario_timeline_data.py が機械的に更新する、手編集禁止) */
+  var SCENARIOS = {
+  "four_scene_demo": {
+    "label": "4シーンデモ(逸脱 vs 反実仮想honest)",
+    "hasCounterfactual": true,
+    "scenes": [
+      {
+        "name": "scene1_build",
+        "label": "構築期",
+        "rounds": [
+          1,
+          10
+        ],
+        "color": "var(--scene-build)"
+      },
+      {
+        "name": "scene2_deviation_injected",
+        "label": "逸脱注入",
+        "rounds": [
+          11,
+          13
+        ],
+        "color": "var(--scene-deviate)"
+      },
+      {
+        "name": "scene3_trigger_active",
+        "label": "トリガー発動",
+        "rounds": [
+          14,
+          23
+        ],
+        "color": "var(--scene-punish)"
+      },
+      {
+        "name": "scene4_recovery",
+        "label": "回復",
+        "rounds": [
+          24,
+          38
+        ],
+        "color": "var(--scene-recover)"
+      }
+    ],
+    "N": 38,
+    "sceneNames": [
+      "scene1_build",
+      "scene1_build",
+      "scene1_build",
+      "scene1_build",
+      "scene1_build",
+      "scene1_build",
+      "scene1_build",
+      "scene1_build",
+      "scene1_build",
+      "scene1_build",
+      "scene2_deviation_injected",
+      "scene2_deviation_injected",
+      "scene2_deviation_injected",
+      "scene3_trigger_active",
+      "scene3_trigger_active",
+      "scene3_trigger_active",
+      "scene3_trigger_active",
+      "scene3_trigger_active",
+      "scene3_trigger_active",
+      "scene3_trigger_active",
+      "scene3_trigger_active",
+      "scene3_trigger_active",
+      "scene3_trigger_active",
+      "scene4_recovery",
+      "scene4_recovery",
+      "scene4_recovery",
+      "scene4_recovery",
+      "scene4_recovery",
+      "scene4_recovery",
+      "scene4_recovery",
+      "scene4_recovery",
+      "scene4_recovery",
+      "scene4_recovery",
+      "scene4_recovery",
+      "scene4_recovery",
+      "scene4_recovery",
+      "scene4_recovery",
+      "scene4_recovery"
+    ],
+    "creditActual": [
+      10.0,
+      11.834,
+      13.516,
+      15.058,
+      16.472,
+      17.769,
+      18.958,
+      20.049,
+      21.049,
+      21.966,
+      22.807,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      10.0,
+      11.834,
+      13.516,
+      15.058,
+      16.472,
+      17.769,
+      18.958,
+      20.049,
+      21.049,
+      21.966,
+      22.807,
+      23.578,
+      24.285,
+      24.933,
+      25.528
+    ],
+    "declaredActual": [
+      8.0,
+      11.834,
+      8.0,
+      8.0,
+      15.0,
+      8.0,
+      8.0,
+      15.0,
+      8.0,
+      8.0,
+      1000.0,
+      1000.0,
+      1000.0,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      8.0,
+      8.0,
+      13.516,
+      8.0,
+      8.0,
+      15.0,
+      8.0,
+      8.0,
+      15.0,
+      8.0,
+      8.0,
+      15.0,
+      8.0,
+      8.0,
+      15.0
+    ],
+    "compliantActual": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "wonActual": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true
+    ],
+    "utilActual": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      15.0,
+      22.2,
+      28.68,
+      28.68,
+      28.68,
+      28.68,
+      28.68,
+      28.68,
+      28.68,
+      28.68,
+      28.68,
+      28.68,
+      28.68,
+      28.68,
+      28.68,
+      31.768,
+      31.768,
+      31.768,
+      34.02,
+      34.02,
+      34.02,
+      35.661,
+      35.661,
+      35.661,
+      36.858,
+      36.858,
+      36.858,
+      37.73
+    ],
+    "utilCf": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      15.0,
+      15.0,
+      15.0,
+      25.935,
+      25.935,
+      25.935,
+      33.907,
+      33.907,
+      33.907,
+      39.718,
+      39.718,
+      39.718,
+      43.954,
+      43.954,
+      43.954,
+      47.043,
+      47.043,
+      47.043,
+      49.294,
+      49.294,
+      49.294,
+      50.935,
+      50.935,
+      50.935,
+      52.132,
+      52.132,
+      52.132,
+      53.004
+    ],
+    "verdictGood": true,
+    "verdictText": "逸脱は得にならない: 制裁で信用枠が急落し、回復にラウンドを要する間、逸脱した場合の累積効用(+37.73)は反実仮想(+53.00)を一貫して下回り続ける(D-24)。"
+  },
+  "punishment_loop": {
+    "label": "信用枠超過の自己永続ループ(倍率1.2)",
+    "hasCounterfactual": false,
+    "scenes": [
+      {
+        "name": "sustained_violation",
+        "label": "倍率1.2を継続",
+        "rounds": [
+          1,
+          30
+        ],
+        "color": "var(--scene-punish)"
+      }
+    ],
+    "N": 30,
+    "sceneNames": [
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation",
+      "sustained_violation"
+    ],
+    "creditActual": [
+      10.0,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5
+    ],
+    "declaredActual": [
+      12.0,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6,
+      0.6
+    ],
+    "compliantActual": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "wonActual": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "utilActual": [
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0,
+      8.0
+    ],
+    "utilCf": null,
+    "verdictGood": null,
+    "verdictText": "倍率1.2(信用枠の1.2倍)を申告し続けると、初回(ラウンド1)で即座に違反し制裁が発動、信用枠が0.5まで急落する。縮小した信用枠に対しても同じ倍率で申告し続けるため再び違反となり、制裁が延々とリセットされ続ける自己永続ループに陥る——30ラウンド中、2ラウンド目以降は一度も当選できない。累積効用は初回勝利時の真の評価額(8.0)で頭打ちになる。"
   }
+};
+  /* SCENARIOS_DATA_END */
 
+  var scenarioOrder = ["four_scene_demo", "punishment_loop"];
+  var currentScenarioId = scenarioOrder[0];
   var current = 0; // 0 = before round1
   var playing = false;
   var playTimer = null;
@@ -205,63 +722,137 @@
   var chartCredit = document.getElementById("chart-credit");
   var chartUtility = document.getElementById("chart-utility");
 
-  function xScale(round) { return 44 + (round - 1) / (N - 1) * (760 - 44 - 12); }
-  function yScaleCredit(v) { return 168 - (v / 32) * 148; }
-  function yScaleUtil(v) { return 168 - (v / 56) * 148; }
+  function scenario() { return SCENARIOS[currentScenarioId]; }
 
-  function buildChart(svgEl, values, valuesCf, yScale, yTicks) {
-    var parts = [];
-    // scene bands
-    scenes.forEach(function (s) {
-      var x0 = xScale(s.rounds[0]) - (s.rounds[0] === 1 ? 4 : 3);
-      var x1 = xScale(s.rounds[1]) + 3;
-      parts.push('<rect x="' + x0 + '" y="8" width="' + (x1 - x0) + '" height="160" fill="' + s.color + '"></rect>');
+  function sceneForRound(r) {
+    var s = scenario();
+    for (var i = 0; i < s.scenes.length; i++) {
+      if (r >= s.scenes[i].rounds[0] && r <= s.scenes[i].rounds[1]) return s.scenes[i];
+    }
+    return s.scenes[0];
+  }
+
+  function renderScenarioPicker() {
+    var picker = document.getElementById("scenario-picker");
+    picker.innerHTML = "";
+    scenarioOrder.forEach(function (id) {
+      var btn = document.createElement("button");
+      btn.className = "scenario-btn" + (id === currentScenarioId ? " active" : "");
+      btn.textContent = SCENARIOS[id].label;
+      btn.addEventListener("click", function () {
+        stopPlaying();
+        currentScenarioId = id;
+        current = 0;
+        var s = scenario();
+        scrubber.max = s.N;
+        renderScenarioPicker(); // ボタンのactiveクラスをcurrentScenarioIdに合わせて更新する
+        render();
+      });
+      picker.appendChild(btn);
     });
-    // gridlines + y labels
+  }
+
+  function renderLegend() {
+    var s = scenario();
+    var parts = ['<span class="legend-item"><span class="swatch-line actual"></span>実際</span>'];
+    if (s.hasCounterfactual) {
+      parts.push('<span class="legend-item"><span class="swatch-line" style="border-top:2px dashed var(--cf);height:0;width:16px;"></span>遵守を貫いた場合(反実仮想)</span>');
+    }
+    var seen = {};
+    s.scenes.forEach(function (sc) {
+      if (seen[sc.label]) return;
+      seen[sc.label] = true;
+      parts.push('<span class="legend-item"><span class="swatch-band" style="background:' + sc.color + '"></span>' + sc.label + '</span>');
+    });
+    document.getElementById("legend").innerHTML = parts.join("");
+  }
+
+  function xScale(round, N) { return 44 + (round - 1) / (N - 1) * (760 - 44 - 12); }
+
+  function buildChart(svgEl, s, values, valuesCf, yScale, yTicks) {
+    var parts = [];
+    var N = s.N;
+    s.scenes.forEach(function (sc) {
+      var x0 = xScale(sc.rounds[0], N) - (sc.rounds[0] === 1 ? 4 : 3);
+      var x1 = xScale(sc.rounds[1], N) + 3;
+      parts.push('<rect x="' + x0 + '" y="8" width="' + (x1 - x0) + '" height="160" fill="' + sc.color + '"></rect>');
+    });
     yTicks.forEach(function (t) {
       var y = yScale(t);
       parts.push('<line class="gridline" x1="40" y1="' + y + '" x2="752" y2="' + y + '"></line>');
       parts.push('<text class="axis-label" x="4" y="' + (y + 3) + '">' + t + "</text>");
     });
-    // lines up to `current`
     var n = Math.max(current, 1);
     var ptsActual = [], ptsCf = [];
     for (var r = 1; r <= n; r++) {
-      ptsActual.push(xScale(r) + "," + yScale(values[r - 1]));
-      ptsCf.push(xScale(r) + "," + yScale(valuesCf[r - 1]));
+      ptsActual.push(xScale(r, N) + "," + yScale(values[r - 1]));
+      if (valuesCf) { ptsCf.push(xScale(r, N) + "," + yScale(valuesCf[r - 1])); }
     }
     if (current > 0) {
-      parts.push('<polyline class="line-cf" points="' + ptsCf.join(" ") + '"></polyline>');
+      if (valuesCf) {
+        parts.push('<polyline class="line-cf" points="' + ptsCf.join(" ") + '"></polyline>');
+      }
       parts.push('<polyline class="line-actual" points="' + ptsActual.join(" ") + '"></polyline>');
       var lastR = current;
-      parts.push('<circle class="dot-cf" r="3" cx="' + xScale(lastR) + '" cy="' + yScale(valuesCf[lastR - 1]) + '"></circle>');
-      parts.push('<circle class="dot-actual" r="3.5" cx="' + xScale(lastR) + '" cy="' + yScale(values[lastR - 1]) + '"></circle>');
-      parts.push('<line class="now-line" x1="' + xScale(lastR) + '" y1="8" x2="' + xScale(lastR) + '" y2="168" stroke-dasharray="2 2"></line>');
+      if (valuesCf) {
+        parts.push('<circle class="dot-cf" r="3" cx="' + xScale(lastR, N) + '" cy="' + yScale(valuesCf[lastR - 1]) + '"></circle>');
+      }
+      parts.push('<circle class="dot-actual" r="3.5" cx="' + xScale(lastR, N) + '" cy="' + yScale(values[lastR - 1]) + '"></circle>');
+      parts.push('<line class="now-line" x1="' + xScale(lastR, N) + '" y1="8" x2="' + xScale(lastR, N) + '" y2="168" stroke-dasharray="2 2"></line>');
     }
     svgEl.innerHTML = parts.join("");
   }
 
+  function niceMax(values, valuesCf) {
+    var all = values.slice();
+    if (valuesCf) { all = all.concat(valuesCf); }
+    return Math.max.apply(null, all) * 1.15 || 1;
+  }
+
   function render() {
+    var s = scenario();
+    var N = s.N;
+    scrubber.max = N;
     scrubber.value = current;
     roundCount.textContent = "ラウンド " + current + " / " + N;
 
-    buildChart(chartCredit, creditActual, creditCf, yScaleCredit, [0, 10, 20, 30]);
-    buildChart(chartUtility, utilActual, utilCf, yScaleUtil, [0, 20, 40]);
+    var creditMax = niceMax(s.creditActual, null);
+    var utilMax = niceMax(s.utilActual, s.utilCf);
+    function yScaleCredit(v) { return 168 - (v / creditMax) * 148; }
+    function yScaleUtil(v) { return 168 - (v / utilMax) * 148; }
+    var creditTicks = [0, Math.round(creditMax / 3), Math.round((creditMax * 2) / 3)];
+    var utilTicks = [0, Math.round(utilMax / 3), Math.round((utilMax * 2) / 3)];
+
+    buildChart(chartCredit, s, s.creditActual, null, yScaleCredit, creditTicks);
+    buildChart(chartUtility, s, s.utilActual, s.utilCf, yScaleUtil, utilTicks);
+    renderLegend();
 
     if (current === 0) {
       detailBody.innerHTML = '<div class="detail-row"><span class="k">開始前</span><span class="v">再生かスクラバーで進めてください</span></div>';
     } else {
       var idx = current - 1;
       var scene = sceneForRound(current);
-      detailBody.innerHTML =
+      var rows =
         '<div class="detail-row"><span class="k">シーン</span><span class="scene-tag" style="background:' + scene.color + '">' + scene.label + '</span></div>' +
-        '<div class="detail-row"><span class="k">信用枠</span><span class="v">' + creditActual[idx].toFixed(2) + '</span></div>' +
-        '<div class="detail-row"><span class="k">申告</span><span class="v">' + declaredActual[idx].toFixed(2) + '</span></div>' +
-        '<div class="detail-row"><span class="k">遵守?</span><span class="v"><span class="pill ' + (compliantActual[idx] ? "ok" : "bad") + '">' + (compliantActual[idx] ? "YES" : "NO") + '</span></span></div>' +
-        '<div class="detail-row"><span class="k">当選?</span><span class="v"><span class="pill ' + (wonActual[idx] ? "ok" : "bad") + '">' + (wonActual[idx] ? "YES" : "NO") + '</span></span></div>' +
-        '<div class="detail-row"><span class="k">累積効用(実際)</span><span class="v">' + utilActual[idx].toFixed(2) + '</span></div>' +
-        '<div class="detail-row"><span class="k">累積効用(反実仮想)</span><span class="v">' + utilCf[idx].toFixed(2) + '</span></div>';
+        '<div class="detail-row"><span class="k">信用枠</span><span class="v">' + s.creditActual[idx].toFixed(2) + '</span></div>' +
+        '<div class="detail-row"><span class="k">申告</span><span class="v">' + s.declaredActual[idx].toFixed(2) + '</span></div>' +
+        '<div class="detail-row"><span class="k">遵守?</span><span class="v"><span class="pill ' + (s.compliantActual[idx] ? "ok" : "bad") + '">' + (s.compliantActual[idx] ? "YES" : "NO") + '</span></span></div>' +
+        '<div class="detail-row"><span class="k">当選?</span><span class="v"><span class="pill ' + (s.wonActual[idx] ? "ok" : "bad") + '">' + (s.wonActual[idx] ? "YES" : "NO") + '</span></span></div>' +
+        '<div class="detail-row"><span class="k">累積効用(実際)</span><span class="v">' + s.utilActual[idx].toFixed(2) + '</span></div>';
+      if (s.utilCf) {
+        rows += '<div class="detail-row"><span class="k">累積効用(反実仮想)</span><span class="v">' + s.utilCf[idx].toFixed(2) + '</span></div>';
+      }
+      detailBody.innerHTML = rows;
     }
+
+    document.getElementById("summary-title").textContent = "最終結果(ラウンド" + N + "時点)";
+    var summaryHtml = '<div class="summary-row actual"><span>実際</span><span class="v">' + s.utilActual[N - 1].toFixed(2) + '</span></div>';
+    if (s.utilCf) {
+      summaryHtml += '<div class="summary-row cf"><span>遵守を貫いた場合</span><span class="v">' + s.utilCf[N - 1].toFixed(2) + '</span></div>';
+    }
+    document.getElementById("summary-body").innerHTML = summaryHtml;
+    document.getElementById("verdict").innerHTML = s.verdictText;
+    document.getElementById("source").textContent = "出典: cases/credit_allocation/visualize/generate_scenario_timeline_data.py の実行結果";
 
     document.getElementById("btn-prev").disabled = current === 0;
     document.getElementById("btn-next").disabled = current === N;
@@ -274,6 +865,7 @@
   }
 
   document.getElementById("btn-next").addEventListener("click", function () {
+    var N = scenario().N;
     if (current < N) { current++; render(); }
     if (current === N) stopPlaying();
   });
@@ -287,11 +879,12 @@
   });
   document.getElementById("btn-play").addEventListener("click", function () {
     if (playing) { stopPlaying(); return; }
+    var N = scenario().N;
     if (current >= N) current = 0;
     playing = true;
     document.getElementById("btn-play").textContent = "❚❚ 停止";
     playTimer = setInterval(function () {
-      if (current >= N) { stopPlaying(); return; }
+      if (current >= scenario().N) { stopPlaying(); return; }
       current++; render();
     }, 260);
   });
@@ -301,6 +894,7 @@
     render();
   });
 
+  renderScenarioPicker();
   render();
 })();
 </script>

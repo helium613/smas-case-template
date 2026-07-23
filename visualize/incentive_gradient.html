@@ -1,0 +1,443 @@
+<title>SMAS インセンティブ勾配</title>
+<style>
+  :root {
+    --bg: #f3f1ec;
+    --panel: #ffffff;
+    --panel-2: #ece9e2;
+    --panel-3: #e2ded2;
+    --border: #d8d3c8;
+    --text: #23211d;
+    --text-muted: #6b6558;
+    --text-faint: #a29c8c;
+    --accent: #8a5a2e;
+    --accent-bg: #f3e6d6;
+    --good: #1f8a68;
+    --good-bg: #dcf1e9;
+    --bad: #b2502a;
+    --bad-bg: #f6e4da;
+    --line: #8a5a2e;
+    --shadow: 0 1px 2px rgba(35,33,29,0.06), 0 8px 24px rgba(35,33,29,0.06);
+    --font-display: -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", "Consolas", "Menlo", monospace;
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161b; --panel: #1b1e25; --panel-2: #21242c; --panel-3: #262a33; --border: #2e323c;
+    --text: #e9e6de; --text-muted: #97917f; --text-faint: #6b6658;
+    --accent: #d3a86a; --accent-bg: #3a2c17;
+    --good: #4bd3a4; --good-bg: #16332a;
+    --bad: #ec8c62; --bad-bg: #3a2419;
+    --line: #d3a86a;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161b; --panel: #1b1e25; --panel-2: #21242c; --panel-3: #262a33; --border: #2e323c;
+      --text: #e9e6de; --text-muted: #97917f; --text-faint: #6b6658;
+      --accent: #d3a86a; --accent-bg: #3a2c17;
+      --good: #4bd3a4; --good-bg: #16332a;
+      --bad: #ec8c62; --bad-bg: #3a2419;
+      --line: #d3a86a;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-display); padding: 28px; }
+  .wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+  header { display: flex; flex-direction: column; gap: 6px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); }
+  h1 { font-size: 24px; font-weight: 650; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .sub { color: var(--text-muted); font-size: 14px; max-width: 72ch; line-height: 1.55; margin: 2px 0 0; }
+  .sub code { font-family: var(--font-mono); font-size: 12.5px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+
+  .case-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+  .case-btn {
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+    padding: 7px 12px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text-muted); cursor: pointer;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .case-btn:hover { border-color: var(--accent); color: var(--text); }
+  .case-btn.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+  .case-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 22px 24px; }
+  .chart-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+  .chart-sub { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin: 0 0 16px; }
+
+  svg.chart { width: 100%; height: auto; overflow: visible; }
+  .axis-line { stroke: var(--border); stroke-width: 1.4; }
+  .grid-line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.6; }
+  .axis-label { fill: var(--text-faint); font-family: var(--font-mono); font-size: 10.5px; }
+  .curve-path { fill: none; stroke: var(--line); stroke-width: 2.4; stroke-linejoin: round; }
+  .curve-point { fill: var(--line); }
+  .honest-line { stroke: var(--good); stroke-width: 1.6; stroke-dasharray: 5 4; }
+  .honest-label { fill: var(--good); font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; }
+  .peak-marker { fill: var(--bad); }
+  .peak-label { fill: var(--bad); font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; }
+  .axis-title { fill: var(--text-muted); font-family: var(--font-display); font-size: 11.5px; }
+
+  .note { margin-top: 16px; padding: 12px 14px; border-radius: 9px; border: 1.4px dashed var(--border); font-size: 12.5px; color: var(--text-muted); line-height: 1.65; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px 20px; margin-top: 14px; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+  .legend .swatch { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .source { padding: 12px 0 0; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); line-height: 1.6; }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">SMAS — インセンティブ勾配プロトタイプ</span>
+    <h1>申告値をずらすと、効用はどう動くか</h1>
+    <p class="sub">
+      「正直申告が最適である」という主張を、テキストの反実仮想比較だけでなく、
+      申告値(または戦略の強さ)を連続的にずらした効用カーブそのものとして見る。
+      平坦なプラトーは「操作する動機が無い」ことを、鋭いピーク+崖は
+      「操作する動機がある(制度の穴)」ことを、一目で示す。
+    </p>
+  </header>
+
+  <div class="case-picker" id="case-picker"></div>
+
+  <div class="panel">
+    <div class="chart-title" id="chart-title"></div>
+    <div class="chart-sub" id="chart-sub"></div>
+    <svg class="chart" id="chart" viewBox="0 0 860 380"></svg>
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--line);"></span>実現効用</span>
+      <span><span class="swatch" style="background:var(--good); border-top: 2px dashed var(--good); height:0; background:none;"></span>正直申告の基準</span>
+      <span><span class="swatch" style="background:var(--bad);"></span>ピーク/崖</span>
+    </div>
+    <div class="note" id="chart-note"></div>
+    <div class="source" id="chart-source"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* GRADIENT_DATA_START (visualize/generate_incentive_gradient_data.py が機械的に更新する、手編集禁止) */
+  var GRADIENT_DATA = {
+  "task_allocation": {
+    "xLabel": "aliceの申告値(真の評価額=10.0、競合bobの申告=7.0で固定)",
+    "yLabel": "aliceの実現効用(単発)",
+    "honestX": 10.0,
+    "points": [
+      [
+        0,
+        0.0
+      ],
+      [
+        1,
+        0.0
+      ],
+      [
+        2,
+        0.0
+      ],
+      [
+        3,
+        0.0
+      ],
+      [
+        4,
+        0.0
+      ],
+      [
+        5,
+        0.0
+      ],
+      [
+        6,
+        0.0
+      ],
+      [
+        6.5,
+        0.0
+      ],
+      [
+        6.9,
+        0.0
+      ],
+      [
+        6.99,
+        0.0
+      ],
+      [
+        7.0,
+        3.0
+      ],
+      [
+        7.01,
+        3.0
+      ],
+      [
+        7.5,
+        3.0
+      ],
+      [
+        8,
+        3.0
+      ],
+      [
+        9,
+        3.0
+      ],
+      [
+        10,
+        3.0
+      ],
+      [
+        11,
+        3.0
+      ],
+      [
+        12,
+        3.0
+      ],
+      [
+        14,
+        3.0
+      ],
+      [
+        17,
+        3.0
+      ],
+      [
+        20,
+        3.0
+      ]
+    ],
+    "note": "VCG(セカンドプライス)は「勝てば競合の申告額(第2価格)を支払う」ため、競合の申告(7.0)を上回ってさえいれば、どれだけ高く申告しても支払いは変わらず効用は一定(平坦なプラトー)。正直申告(10.0)はこの安全地帯の内側にあり、過大申告する動機が構造的に存在しない。"
+  },
+  "credit_allocation": {
+    "xLabel": "信用枠に対する倍率で全30ラウンド貫いた場合(1.0=信用枠ちょうど)",
+    "yLabel": "carolの割引後合計効用(30ラウンド、discount=0.9)",
+    "honestY": 47.704,
+    "points": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.1,
+        0.0
+      ],
+      [
+        0.2,
+        0.0
+      ],
+      [
+        0.3,
+        5.365
+      ],
+      [
+        0.4,
+        24.362
+      ],
+      [
+        0.5,
+        34.581
+      ],
+      [
+        0.6,
+        44.77
+      ],
+      [
+        0.7,
+        66.139
+      ],
+      [
+        0.8,
+        73.835
+      ],
+      [
+        0.85,
+        78.558
+      ],
+      [
+        0.9,
+        78.558
+      ],
+      [
+        0.95,
+        78.558
+      ],
+      [
+        0.98,
+        78.558
+      ],
+      [
+        1.0,
+        98.87
+      ],
+      [
+        1.01,
+        8.0
+      ],
+      [
+        1.02,
+        8.0
+      ],
+      [
+        1.05,
+        8.0
+      ],
+      [
+        1.1,
+        8.0
+      ],
+      [
+        1.2,
+        8.0
+      ],
+      [
+        1.4,
+        8.0
+      ],
+      [
+        1.6,
+        8.0
+      ],
+      [
+        1.8,
+        8.0
+      ],
+      [
+        2.0,
+        8.0
+      ]
+    ],
+    "note": "「信用枠のX倍を常に申告する」固定戦略を30ラウンド貫いた場合の割引後合計効用(run_sustained_strategy_comparisonと同じ手法、D-38)。倍率1.0(信用枠ちょうど)でピーク(98.87)を迎え、正直申告の合計効用(47.704)を大きく上回る——D-37/D-38の発見そのもの。倍率が1.0をわずかでも超えると違反として検出され、制裁で効用が崖のように落ちる(8.0まで低下)。"
+  }
+};
+  /* GRADIENT_DATA_END */
+
+  var cases = [
+    { id: "task_allocation", label: "①タスク配分(VCG)", type: "step", showPeak: false,
+      title: "ケース1: VCG(セカンドプライスオークション)",
+      source: "出典: incentive_engine.SingleItemVcgEngine を直接呼び出して計算(visualize/generate_incentive_gradient_data.py)。" },
+    { id: "credit_allocation", label: "②信用枠配分", type: "line", showPeak: true,
+      title: "ケース2: 信用枠配分(トリガー戦略)",
+      source: "出典: deviation_test.run_sustained_strategy_comparison と同じ手法で計算(visualize/generate_incentive_gradient_data.py、D-38と同じ設定)。" },
+  ];
+  var current = cases[0].id;
+
+  function findCase(id) { return cases.filter(function (c) { return c.id === id; })[0]; }
+
+  function renderPicker() {
+    var picker = document.getElementById("case-picker");
+    picker.innerHTML = "";
+    cases.forEach(function (c) {
+      var btn = document.createElement("button");
+      btn.className = "case-btn" + (c.id === current ? " active" : "");
+      btn.textContent = c.label;
+      btn.addEventListener("click", function () { current = c.id; render(); });
+      picker.appendChild(btn);
+    });
+  }
+
+  var W = 860, H = 380, MARGIN = { top: 24, right: 30, bottom: 46, left: 56 };
+  var plotW = W - MARGIN.left - MARGIN.right;
+  var plotH = H - MARGIN.top - MARGIN.bottom;
+
+  function buildPath(points, scaleX, scaleY, step) {
+    var d = "";
+    points.forEach(function (p, i) {
+      var x = scaleX(p[0]), y = scaleY(p[1]);
+      if (i === 0) {
+        d += "M " + x + " " + y;
+      } else if (step) {
+        var prevY = scaleY(points[i - 1][1]);
+        d += " L " + x + " " + prevY + " L " + x + " " + y;
+      } else {
+        d += " L " + x + " " + y;
+      }
+    });
+    return d;
+  }
+
+  function niceTicks(min, max, count) {
+    var ticks = [];
+    for (var i = 0; i <= count; i++) {
+      ticks.push(min + ((max - min) * i) / count);
+    }
+    return ticks;
+  }
+
+  function render() {
+    renderPicker();
+    var c = findCase(current);
+    var data = GRADIENT_DATA[c.id];
+    document.getElementById("chart-title").textContent = c.title;
+    document.getElementById("chart-sub").textContent = data.xLabel + " → " + data.yLabel;
+    document.getElementById("chart-note").innerHTML = "<b>読み方</b>: " + data.note;
+    document.getElementById("chart-source").textContent = c.source;
+
+    var xs = data.points.map(function (p) { return p[0]; });
+    var ys = data.points.map(function (p) { return p[1]; });
+    if (data.honestY !== undefined) { ys.push(data.honestY); }
+    var xMin = Math.min.apply(null, xs), xMax = Math.max.apply(null, xs);
+    var yMin = Math.min(0, Math.min.apply(null, ys));
+    var yMax = Math.max.apply(null, ys) * 1.12;
+
+    function scaleX(x) { return MARGIN.left + ((x - xMin) / (xMax - xMin)) * plotW; }
+    function scaleY(y) { return MARGIN.top + plotH - ((y - yMin) / (yMax - yMin)) * plotH; }
+
+    var svg = document.getElementById("chart");
+    var parts = [];
+
+    // gridlines + y ticks
+    var yTicks = niceTicks(yMin, yMax, 5);
+    yTicks.forEach(function (t) {
+      var y = scaleY(t);
+      parts.push('<line class="grid-line" x1="' + MARGIN.left + '" y1="' + y + '" x2="' + (W - MARGIN.right) + '" y2="' + y + '"></line>');
+      parts.push('<text class="axis-label" x="' + (MARGIN.left - 8) + '" y="' + (y + 3) + '" text-anchor="end">' + t.toFixed(1) + '</text>');
+    });
+
+    // x ticks
+    var xTicks = niceTicks(xMin, xMax, 6);
+    xTicks.forEach(function (t) {
+      var x = scaleX(t);
+      parts.push('<text class="axis-label" x="' + x + '" y="' + (H - MARGIN.bottom + 18) + '" text-anchor="middle">' + t.toFixed(2).replace(/\.00$/, "") + '</text>');
+    });
+
+    // axes
+    parts.push('<line class="axis-line" x1="' + MARGIN.left + '" y1="' + MARGIN.top + '" x2="' + MARGIN.left + '" y2="' + (H - MARGIN.bottom) + '"></line>');
+    parts.push('<line class="axis-line" x1="' + MARGIN.left + '" y1="' + (H - MARGIN.bottom) + '" x2="' + (W - MARGIN.right) + '" y2="' + (H - MARGIN.bottom) + '"></line>');
+
+    // honest reference
+    if (data.honestX !== undefined) {
+      var hx = scaleX(data.honestX);
+      parts.push('<line class="honest-line" x1="' + hx + '" y1="' + MARGIN.top + '" x2="' + hx + '" y2="' + (H - MARGIN.bottom) + '"></line>');
+      parts.push('<text class="honest-label" x="' + (hx + 6) + '" y="' + (MARGIN.top + 14) + '">正直申告(入力値) ' + data.honestX + '</text>');
+    }
+    if (data.honestY !== undefined) {
+      var hy = scaleY(data.honestY);
+      parts.push('<line class="honest-line" x1="' + MARGIN.left + '" y1="' + hy + '" x2="' + (W - MARGIN.right) + '" y2="' + hy + '"></line>');
+      parts.push('<text class="honest-label" x="' + (W - MARGIN.right - 4) + '" y="' + (hy - 6) + '" text-anchor="end">正直申告を貫いた場合(結果) ' + data.honestY + '</text>');
+    }
+
+    // curve
+    parts.push('<path class="curve-path" d="' + buildPath(data.points, scaleX, scaleY, c.type === "step") + '"></path>');
+    data.points.forEach(function (p) {
+      parts.push('<circle class="curve-point" cx="' + scaleX(p[0]) + '" cy="' + scaleY(p[1]) + '" r="2.6"><title>x=' + p[0] + ", y=" + p[1] + '</title></circle>');
+    });
+
+    // peak marker (max y point) — only shown where a genuine exploitable peak exists,
+    // not for flat-plateau mechanisms like VCG (case1) where no single point is special.
+    if (c.showPeak) {
+      var peak = data.points.reduce(function (a, b) { return b[1] > a[1] ? b : a; });
+      parts.push('<circle class="peak-marker" cx="' + scaleX(peak[0]) + '" cy="' + scaleY(peak[1]) + '" r="4.5"></circle>');
+      parts.push('<text class="peak-label" x="' + scaleX(peak[0]) + '" y="' + (scaleY(peak[1]) - 10) + '" text-anchor="middle">ピーク (' + peak[0] + ", " + peak[1] + ')</text>');
+    }
+
+    // axis titles
+    parts.push('<text class="axis-title" x="' + (MARGIN.left + plotW / 2) + '" y="' + (H - 4) + '" text-anchor="middle">' + data.xLabel + '</text>');
+
+    svg.innerHTML = parts.join("");
+  }
+
+  render();
+})();
+</script>
