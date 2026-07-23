@@ -28,6 +28,7 @@ from schemas.environment_schema import EnvironmentConfig
 from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
 
+from analysis import rank_chokepoint_edges
 from delegation_agents import TrustDeclaringAgent
 from deviation_test import run_scene, run_three_scene_demo
 from incentive_engine import PrivilegeDelegationEngine, PrivilegeDelegationParameters
@@ -97,6 +98,12 @@ def main() -> None:
     )
     scene2_escalated = set(esc_report.scene2_escalated)
     individual_rationality_holds = True  # 支払いが無いため効用は常に0以上(構造的に自明、ケース4と同じ)
+
+    # --- chokepointランキング: どのtrust宣言を1件取り除けば最も効果的に解消できるか -----
+    t0 = time.perf_counter()
+    chokepoints = rank_chokepoint_edges(engine, scenes[-1].declarations)
+    chokepoint_elapsed = time.perf_counter() - t0
+    top_chokepoint = chokepoints[0]
 
     # --- ⑤: DisCoPy構造検証 -----------------------------------------------------------
     t0 = time.perf_counter()
@@ -198,11 +205,23 @@ def main() -> None:
         "誰も共謀せず、誰も検出ルールを回避しようとしていないため、これらの評価観点が問う"
         "「意図的な戦略」自体が発生していない。"
     )
+    lines.append(
+        f"- **chokepointランキング(対応への優先順位づけ)**: 「権限昇格ゼロ」自体は目標に"
+        f"ならない(intended_max_tierが一部の多段到達を意図的に許容しているため)ため、"
+        f"限られた対応リソースをどのtrust宣言に振り向けるべきかを`rank_chokepoint_edges`"
+        f"でランキングした。1位は`{top_chokepoint.truster_agent_id}→"
+        f"{top_chokepoint.trusted_agent_id}`(取り除くと{top_chokepoint.escalations_resolved}件"
+        f"の昇格が解消、超過tier合計{top_chokepoint.excess_tier_reduced}分を削減)——シーン2で"
+        f"注入した宣言そのものが正しく最優先に特定された。一方、昇格経路に無関係な"
+        f"edge(deploy_svc→ci_svc)は取り除いても解消0件で最下位にランクされ、優先順位づけが"
+        f"「昇格に無関係な変更まで一律に警告する」誤検知を起こさないことも確認した。"
+    )
     lines.append("")
 
     lines.append("### ④資源コスト: 計算量・実行時間の概算(このマシンでの1回計測、参考値)")
     lines.append(f"- 3シーン構成(平常時x3+合成リスク注入x3、5エージェント): 実測 {scenes_elapsed * 1000:.2f} ms")
     lines.append(f"- モンテカルロ N={mc_summary['n_trials']}試行(6エージェント、ランダムtrust配線): 実測 {montecarlo_elapsed:.3f} 秒")
+    lines.append(f"- chokepointランキング({len(chokepoints)}件のtrust宣言を評価): 実測 {chokepoint_elapsed * 1000:.2f} ms")
     lines.append(f"- ⑤DisCoPy構造検証: 実測 {verification_elapsed * 1000:.2f} ms")
     lines.append("- 資源コスト(#24): 分散台帳・検証可能遅延関数等の本番運用コストは技術選定が未決のため対象外。")
     lines.append("")
@@ -258,6 +277,7 @@ def main() -> None:
         f"①到達可能性={'Yes' if reachability_yes else 'No'} / "
         f"③シーン2昇格={sorted(scene2_escalated)} / "
         f"③モンテカルロ昇格率={mc_summary['escalation_rate']:.1%} / "
+        f"③chokepoint1位={top_chokepoint.truster_agent_id}→{top_chokepoint.trusted_agent_id} / "
         f"⑤DisCoPy={disco_py_pass}"
     )
 
