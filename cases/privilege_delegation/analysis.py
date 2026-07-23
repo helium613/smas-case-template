@@ -17,8 +17,12 @@
    新たに生む(または悪化させる)ものはどれかを一括で判定する。chokepointランキング
    の逆方向(事後の原因特定ではなく、事前に危険な追加を洗い出す)。「1件ずつ
    `What-if`を聞く」のではなく「安全な追加・危険な追加を全部リストアップする」形。
-3. **blast radius計算(次の一手)**: 特定のロールが侵害された場合に、現在の
-   trust設定でどこまで到達しうるかを計算する、インシデント対応用の即時計算。
+3. **blast radius計算(本ファイル、第三弾)**: 特定のロールが今まさに侵害された
+   と仮定し、現在(生きている)のtrust設定でどこまで到達しうるかを即座に計算する、
+   インシデント対応用の計算。chokepointランキング(事後・根本原因の特定)・
+   候補スキャン(事前・新規追加の安全性チェック)とは異なる第3の視点——「今この
+   瞬間、特定のノードが侵害されたら」という、生きたtrust設定に対する即時のリスク
+   評価。
 """
 from __future__ import annotations
 
@@ -192,3 +196,50 @@ def scan_candidate_trust_grants(
 
     results.sort(key=lambda r: r.excess_introduced, reverse=True)
     return results
+
+
+@dataclass
+class BlastRadiusResult:
+    """特定の1エージェントが今まさに侵害されたと仮定した場合の被害範囲。"""
+
+    compromised_agent_id: str
+
+    reachable_agent_ids: list[str]
+    """侵害されたエージェントが到達可能な全エージェント(自分自身を含む、tier降順)。"""
+
+    max_tier_reached: int
+    intended_max_tier: int
+    exceeds_intended: bool
+    """到達可能な最大tierが、このエージェント自身のintended_max_tierを超えるか。"""
+
+    escalation_exposure: list[str]
+    """到達可能な中で、このエージェント自身のintended_max_tierを超えるtierを持つ
+    エージェント(=想定外の被害範囲。優先して資格情報のローテーション・監査対象に
+    すべき相手)。"""
+
+
+def compute_blast_radius(
+    engine: PrivilegeDelegationEngine, declarations: list[Declaration], compromised_agent_id: str
+) -> BlastRadiusResult:
+    """特定の1エージェントの資格情報が今まさに侵害されたと仮定し、現在のtrust設定で
+    攻撃者がどこまで到達しうるかを即座に計算する(インシデント対応用)。
+
+    rank_chokepoint_edges(事後・根本原因の特定)・scan_candidate_trust_grants
+    (事前・新規追加の安全性チェック)とは異なる第3の視点: 「今この瞬間、特定の
+    ノードが侵害されたら」という、生きているtrust設定に対する即時のリスク評価。
+    """
+    tiers = engine.parameters.tiers
+    intended = engine.parameters.intended_max_tier[compromised_agent_id]
+    reachable = engine.reachable_agent_ids(declarations, compromised_agent_id)
+    reachable_sorted = sorted(reachable, key=lambda a: tiers[a], reverse=True)
+    max_tier = max(tiers[a] for a in reachable)
+    escalation_exposure = [a for a in reachable_sorted if tiers[a] > intended]
+
+    return BlastRadiusResult(
+        compromised_agent_id=compromised_agent_id,
+        reachable_agent_ids=reachable_sorted,
+        max_tier_reached=max_tier,
+        intended_max_tier=intended,
+        exceeds_intended=max_tier > intended,
+        escalation_exposure=escalation_exposure,
+    )

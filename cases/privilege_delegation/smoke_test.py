@@ -22,7 +22,7 @@ from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
 from verification_kit.information_asymmetry import LeakDetectingAgent, no_intra_round_leak, total_checks
 
-from analysis import rank_chokepoint_edges, scan_candidate_trust_grants
+from analysis import compute_blast_radius, rank_chokepoint_edges, scan_candidate_trust_grants
 from delegation_agents import TrustDeclaringAgent
 from deviation_test import run_scene, run_three_scene_demo
 
@@ -214,6 +214,26 @@ def main() -> None:
             if not c.is_safe
         )
         + ")"
+    )
+
+    # --- blast radius計算: 特定のロールが今侵害されたら、どこまで到達しうるか ---------
+    scene2_declarations = scenes[-1].declarations
+    build_svc_blast = compute_blast_radius(engine, scene2_declarations, "build_svc")
+    check(
+        "blast radius: build_svcが侵害された場合、ci_svc・deploy_svc経由でadmin"
+        "(tier3)まで到達しうる。意図された上限(tier2)を超過し、想定外の被害範囲"
+        "としてadminが検出される",
+        build_svc_blast.exceeds_intended and build_svc_blast.escalation_exposure == ["admin"],
+    )
+    deploy_svc_blast = compute_blast_radius(engine, scene2_declarations, "deploy_svc")
+    check(
+        "blast radius: deploy_svcが侵害されても、自分自身にしか到達できない"
+        "(誰もdeploy_svcにtrustを与えていないため、被害範囲は広がらない)",
+        deploy_svc_blast.reachable_agent_ids == ["deploy_svc"] and not deploy_svc_blast.exceeds_intended,
+    )
+    print(
+        f"       (build_svc侵害時の到達範囲: {build_svc_blast.reachable_agent_ids}、"
+        f"想定外の被害範囲: {build_svc_blast.escalation_exposure})"
     )
 
     # --- 情報の非対称性の制御(#3、D-59の横展開) -------------------------------------
