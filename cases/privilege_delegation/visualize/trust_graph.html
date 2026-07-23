@@ -143,6 +143,18 @@
   .source { padding: 12px 16px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); line-height: 1.6; }
   .source code { color: var(--text-muted); }
 
+  .chokepoint-box { padding: 14px 16px; border-top: 1px solid var(--border); }
+  .chokepoint-box h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin: 0 0 6px; font-weight: 650; }
+  .chokepoint-hint { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0 0 10px; }
+  table.chokepoint { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 12px; }
+  table.chokepoint th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); font-weight: 650; padding: 0 6px 6px; border-bottom: 1px solid var(--border); }
+  table.chokepoint td { padding: 6px 6px; border-bottom: 1px solid var(--border); color: var(--text-muted); }
+  table.chokepoint tr:last-child td { border-bottom: none; }
+  table.chokepoint tr.rank-1 td { color: var(--text); font-weight: 700; }
+  table.chokepoint td.rank-num { color: var(--text-faint); }
+  table.chokepoint tr.rank-1 td.rank-num { color: var(--accent-danger); }
+  table.chokepoint td.edge-cell { color: var(--text); }
+
   @media (prefers-reduced-motion: reduce) {
     .node circle, .edge path { transition-duration: 1ms !important; }
     .log-entry { animation-duration: 1ms !important; }
@@ -238,10 +250,25 @@
           <h2>build_svcの到達可能tier</h2>
           <div class="verdict" id="verdict">ステップを進めると表示されます。</div>
         </div>
+        <div class="chokepoint-box">
+          <h2>chokepointランキング</h2>
+          <p class="chokepoint-hint" id="chokepoint-hint">
+            権限昇格ゼロは目標にならない(2ホップの正当な到達は許容している)。
+            最終ステップまで進めると、限られた対応リソースをどのtrust宣言の
+            見直しに振り向けるべきかのランキングが表示される。
+          </p>
+          <table class="chokepoint" id="chokepoint-table" style="display:none;">
+            <thead>
+              <tr><th>順位</th><th>edge(truster→trusted)</th><th>解消件数</th><th>超過tier削減</th></tr>
+            </thead>
+            <tbody id="chokepoint-body"></tbody>
+          </table>
+        </div>
         <div class="source">
           入力: <code>ci_svc.delegate_to="build_svc", deploy_svc.delegate_to="ci_svc"</code>
           (シーン1)+ <code>admin.delegate_to="ci_svc"</code>(シーン2で追加)<br>
           出典: cases/privilege_delegation/smoke_test.py・generate_results_summary.py と同じ設定
+          (chokepointランキングは<code>analysis.rank_chokepoint_edges()</code>の実行結果)
         </div>
       </div>
     </div>
@@ -269,6 +296,14 @@
     { log: "到達可能な最大tierが<b>3</b>(admin相当)に上昇——意図された上限(2)を<span class=\"danger\">超過</span>。<b>権限昇格が成立</b>。誰も虚偽申告していないのに、2つの独立した正直なtrust宣言(build_svc→ci_svc、ci_svc→admin)がci_svcという1つの中継点を介して合成され、この経路が生まれた(confused deputy)。", nodes: { build_svc: "danger", ci_svc: "danger", deploy_svc: "safe", admin: "danger" }, edges: ["build_svc-ci_svc", "ci_svc-deploy_svc", "ci_svc-admin"], tier: 3, verdict: "到達可能tier = <b>3</b>(意図された上限2を<span class=\"danger\">超過</span>、権限昇格)", final: true }
   ];
 
+  // analysis.rank_chokepoint_edges()を実際に実行した結果(smoke_test.py・
+  // generate_results_summary.pyで検証済み、D-64)。excess_tier_reduced降順。
+  var chokepointRanking = [
+    { truster: "admin", trusted: "ci_svc", resolved: 2, excessReduced: 2 },
+    { truster: "ci_svc", trusted: "build_svc", resolved: 1, excessReduced: 1 },
+    { truster: "deploy_svc", trusted: "ci_svc", resolved: 0, excessReduced: 0 }
+  ];
+
   var nodeIds = ["intern_svc", "build_svc", "ci_svc", "deploy_svc", "admin"];
   var edgeIds = ["build_svc-ci_svc", "ci_svc-deploy_svc", "ci_svc-admin"];
   var current = 0;
@@ -276,6 +311,9 @@
   var logEl = document.getElementById("log");
   var stepCountEl = document.getElementById("step-count");
   var verdictEl = document.getElementById("verdict");
+  var chokepointTableEl = document.getElementById("chokepoint-table");
+  var chokepointBodyEl = document.getElementById("chokepoint-body");
+  var chokepointHintEl = document.getElementById("chokepoint-hint");
 
   function nodeEl(id) { return document.querySelector('.node[data-node="' + id + '"]'); }
   function edgeEl(id) { return document.querySelector('.edge[data-edge="' + id + '"]'); }
@@ -345,6 +383,25 @@
     var st = steps[current];
     verdictEl.innerHTML = st.verdict || "ステップを進めると表示されます。";
     verdictEl.className = "verdict" + (st.final ? " show-danger" : "");
+
+    if (st.final) {
+      chokepointHintEl.style.display = "none";
+      chokepointTableEl.style.display = "";
+      chokepointBodyEl.innerHTML = "";
+      chokepointRanking.forEach(function (row, i) {
+        var tr = document.createElement("tr");
+        tr.className = i === 0 ? "rank-1" : "";
+        tr.innerHTML =
+          '<td class="rank-num">' + (i + 1) + '</td>' +
+          '<td class="edge-cell">' + row.truster + " → " + row.trusted + '</td>' +
+          '<td>' + row.resolved + '件</td>' +
+          '<td>' + row.excessReduced + '</td>';
+        chokepointBodyEl.appendChild(tr);
+      });
+    } else {
+      chokepointHintEl.style.display = "";
+      chokepointTableEl.style.display = "none";
+    }
 
     document.getElementById("btn-prev").disabled = current === 0;
     document.getElementById("btn-next").disabled = current === steps.length - 1;
