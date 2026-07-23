@@ -286,13 +286,14 @@
           </p>
           <table class="chokepoint" id="chokepoint-table" style="display:none;">
             <thead>
-              <tr><th>順位</th><th>edge(truster→trusted)</th><th>解消件数</th><th>超過tier削減</th></tr>
+              <tr><th>順位</th><th>edge(なりすませる側→なりすまされる側)</th><th>解消件数</th><th>超過tier削減</th></tr>
             </thead>
             <tbody id="chokepoint-body"></tbody>
           </table>
           <p class="chokepoint-footnote" id="chokepoint-footnote" style="display:none;">
             * 解消件数 = このedge(trust宣言)を1件だけ取り除いた場合に、権限昇格状態から
-            抜けるエージェントの数。
+            抜けるエージェントの数。矢印の向きは上のグラフと同じ「assumeできる方向」に
+            揃えている(trust宣言そのものの向き=「誰が誰を信頼したか」とは逆になる点に注意)。
           </p>
         </div>
         <div class="blast-box">
@@ -506,7 +507,7 @@
         tr.className = i === 0 ? "rank-1" : "";
         tr.innerHTML =
           '<td class="rank-num">' + (i + 1) + '</td>' +
-          '<td class="edge-cell">' + row.truster + " → " + row.trusted + '</td>' +
+          '<td class="edge-cell">' + row.trusted + " → " + row.truster + '</td>' +
           '<td>' + row.resolved + '件</td>' +
           '<td>' + row.excessReduced + '</td>';
         chokepointBodyEl.appendChild(tr);
