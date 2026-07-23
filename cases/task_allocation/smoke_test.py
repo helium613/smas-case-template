@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from aggregation import TerminationConfig, aggregate_by_ranking, run_mechanism
 from agents.llm_mock import ProbabilisticMockAgent
-from agents.optimization_based import OptimizingBidderAgent
+from agents.optimization_based import OptimizingBidderAgent, ValuationEstimatingBidderAgent
 from agents.rule_based import (
     FluctuatingHonestAgent,
     GreedyOverstatingAgent,
@@ -30,7 +30,7 @@ from agents.rule_based import (
 from environment import EnvironmentClient, WallViolation
 from incentive_engine import SingleItemVcgEngine, SingleItemVcgParameters
 from schemas.environment_schema import EnvironmentConfig, Trace
-from schemas.incentive_schema import Declaration
+from schemas.incentive_schema import Declaration, ParticipationRecord
 from deviation_test import run_three_scene_demo
 from verification import run_structural_verification
 from verification_kit.gambit_collusion import check_pure_nash_collusion
@@ -189,6 +189,61 @@ def main() -> None:
             f"(申告={action.declared_value:.2f})",
             abs(action.declared_value - 10.0) < 0.5,
         )
+
+    # --- 検証キット: 評価額推定エージェント(ToM軽量版、#1・#2、D-77で初適用) --------------
+    # 固定の信念分布(D-34)ではなく、①環境層の公開痕跡(過去ラウンドのみ、#3の対象範囲内)
+    # から観測した競合の申告額履歴を経験分布として使う。cold start(観測不足時)は
+    # フォールバックの広い一様分布を使う。
+    tom_env = EnvironmentClient(EnvironmentConfig(half_life_rounds=3.0, max_trace_age_rounds=30))
+    # ラウンドごとに変動する競合の真の評価額(honest)。自分の真の評価額(10.0)の
+    # 両側に、かつ10.0のすぐ近くにも観測点を置く——経験分布(ブートストラップ)は
+    # 観測点そのものでしか区切れないため、10.0を挟む2点の間隔が広いと、その間の
+    # どの申告額も数値的に同一最適(平坦)になり、10.0付近への収束を主張できない
+    # (全て10.0未満だと過大申告が「勝って損をする」リスクを一切含まず、10.0超の
+    # どの値も同一最適になってしまう、という実装時に発見した罠と同種の限界)。
+    rival_true_values = [6.0, 13.0, 8.0, 15.0, 9.0, 11.0, 9.8, 10.2]
+    for round_id, rival_value in enumerate(rival_true_values, start=1):
+        tom_env.advance_round()
+        tom_env.write_trace(
+            writer_id="rival",
+            trace=Trace(
+                agent_id="rival",
+                round_id=round_id,
+                payload=ParticipationRecord(declared_value=rival_value, won=True, payment=0.0, eligible=True),
+            ),
+        )
+
+    def observed_rival_history(env: EnvironmentClient) -> list[float]:
+        return [
+            t.payload.declared_value
+            for t in env.read_traces()
+            if t.agent_id == "rival" and isinstance(t.payload, ParticipationRecord)
+        ]
+
+    tom_agent = ValuationEstimatingBidderAgent(
+        agent_id="me", true_value=10.0, competitor_id="rival", engine=engine, rng=random.Random(1)
+    )
+    warm_observation = ObservationInput(
+        trace_summary={"competitor_declared_value_history": observed_rival_history(tom_env)}
+    )
+    warm_action = tom_agent.decide(warm_observation)
+    check(
+        f"検証キット(D-77): 過去{len(rival_true_values)}ラウンドの観測(経験分布、"
+        f"信念分布を仮定ではなくデータから推定)からでも、最適な申告額は真の評価額"
+        f"(10.0)に数値的に収束する(申告={warm_action.declared_value:.2f})",
+        abs(warm_action.declared_value - 10.0) < 0.5,
+    )
+
+    cold_agent = ValuationEstimatingBidderAgent(
+        agent_id="me", true_value=10.0, competitor_id="rival", engine=engine, rng=random.Random(1)
+    )
+    cold_action = cold_agent.decide(ObservationInput(trace_summary={}))
+    check(
+        "検証キット(D-77): 観測が全く無いcold start(初回ラウンド相当)でも例外を起こさず、"
+        f"フォールバックの広い信念分布のもとで真の評価額(10.0)に近い申告額に収束する"
+        f"(申告={cold_action.declared_value:.2f})",
+        abs(cold_action.declared_value - 10.0) < 0.5,
+    )
 
     # --- 3シーン構成の疎通確認(シーン3: 反実仮想比較による自己拘束の確認、D-07) ----
     scene_env: EnvironmentClient = EnvironmentClient(env_config)
