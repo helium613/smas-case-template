@@ -154,6 +154,7 @@
   table.chokepoint td.rank-num { color: var(--text-faint); }
   table.chokepoint tr.rank-1 td.rank-num { color: var(--accent-danger); }
   table.chokepoint td.edge-cell { color: var(--text); }
+  .chokepoint-footnote { font-size: 11px; color: var(--text-faint); line-height: 1.5; margin: 8px 0 0; }
 
   @media (prefers-reduced-motion: reduce) {
     .node circle, .edge path { transition-duration: 1ms !important; }
@@ -229,11 +230,12 @@
         </svg>
       </div>
       <div class="legend">
-        <span class="legend-item"><span class="swatch idle"></span>未探索</span>
-        <span class="legend-item"><span class="swatch active"></span>探索中(辿っている辺)</span>
+        <span class="legend-item"><span class="swatch idle"></span>未確認</span>
+        <span class="legend-item"><span class="swatch active"></span>たどり中(たどっている辺)</span>
         <span class="legend-item"><span class="swatch safe"></span>意図された上限内</span>
         <span class="legend-item"><span class="swatch danger"></span>権限昇格(上限超過)</span>
         <span class="legend-item"><span class="swatch new"></span>シーン2で追加された宣言</span>
+        <span class="legend-item">矢印: assumeできる方向(なりすませる側→なりすまされる側。trustを宣言したのは矢印の<b>先</b>)</span>
       </div>
     </div>
 
@@ -263,6 +265,10 @@
             </thead>
             <tbody id="chokepoint-body"></tbody>
           </table>
+          <p class="chokepoint-footnote" id="chokepoint-footnote" style="display:none;">
+            * 解消件数 = このedge(trust宣言)を1件だけ取り除いた場合に、権限昇格状態から
+            抜けるエージェントの数。
+          </p>
         </div>
         <div class="source">
           入力: <code>ci_svc.delegate_to="build_svc", deploy_svc.delegate_to="ci_svc"</code>
@@ -283,16 +289,16 @@
   // 結果(smoke_test.py・generate_results_summary.pyと同じ設定)を、build_svcを起点に
   // 手動でステップ分解して再生する。
   var steps = [
-    { log: "シーン1(平常時)のtrust関係のみが存在する。build_svcを起点に到達可能性を探索する。", nodes: {}, edges: [], hiddenEdges: ["ci_svc-admin"] },
+    { log: "シーン1(平常時)のtrust関係のみが存在する。build_svcが実際にどこまで到達できるかをたどる。", nodes: {}, edges: [], hiddenEdges: ["ci_svc-admin"] },
 
     { log: "<b>build_svc</b>はci_svcをassumeできる(ci_svc.delegate_to=\"build_svc\")→辺を辿る。", nodes: { build_svc: "active", ci_svc: "active" }, edges: ["build_svc-ci_svc"], hiddenEdges: ["ci_svc-admin"] },
     { log: "<b>ci_svc</b>はdeploy_svcをassumeできる(deploy_svc.delegate_to=\"ci_svc\")→さらに辿る。", nodes: { build_svc: "active", ci_svc: "active", deploy_svc: "active" }, edges: ["build_svc-ci_svc", "ci_svc-deploy_svc"], hiddenEdges: ["ci_svc-admin"] },
     { log: "これ以上辿れる相手がいない。到達可能な最大tierはdeploy_svcの<b>tier2</b>——意図された上限(intended_max_tier=2)と<span class=\"safe\">一致</span>、問題なし。", nodes: { build_svc: "safe", ci_svc: "safe", deploy_svc: "safe" }, edges: [], hiddenEdges: ["ci_svc-admin"], tier: 2, verdict: "到達可能tier = <b>2</b>(意図された上限どおり)" },
 
-    { log: "シーン2: <b>admin</b>が新たにci_svcを信頼する(admin.delegate_to=\"ci_svc\", 「CIから緊急時にadminへ」)。単独では局所的に正当な判断。<span class=\"new-note\">新しい辺(ci_svc→admin)が出現。</span>", nodes: { build_svc: "idle", ci_svc: "idle", deploy_svc: "idle" }, edges: [], hiddenEdges: [], newEdges: ["ci_svc-admin"], tier: 2, verdict: "到達可能tier = <b>2</b>(まだ再探索前)" },
+    { log: "シーン2: <b>admin</b>が新たにci_svcを信頼する(admin.delegate_to=\"ci_svc\", 「CIから緊急時にadminへ」)。単独では局所的に正当な判断。<span class=\"new-note\">新しい辺(ci_svc→admin)が出現。</span>", nodes: { build_svc: "idle", ci_svc: "idle", deploy_svc: "idle" }, edges: [], hiddenEdges: [], newEdges: ["ci_svc-admin"], tier: 2, verdict: "到達可能tier = <b>2</b>(まだたどり直す前)" },
 
-    { log: "build_svcから到達可能性を<b>再探索</b>する。build_svc→ci_svcは変わらない。", nodes: { build_svc: "active", ci_svc: "active" }, edges: ["build_svc-ci_svc"], newEdges: ["ci_svc-admin"], tier: 2, verdict: "到達可能tier = <b>2</b>(探索中)" },
-    { log: "ci_svcは今度はdeploy_svcだけでなく<b>admin</b>にもassumeできる(admin.delegate_to=\"ci_svc\")→この辺も辿る。", nodes: { build_svc: "active", ci_svc: "active", deploy_svc: "active", admin: "active" }, edges: ["build_svc-ci_svc", "ci_svc-deploy_svc", "ci_svc-admin"], tier: 3, verdict: "到達可能tier = <b>3</b>(admin相当、探索中)" },
+    { log: "build_svcが到達できる範囲を<b>もう一度たどり直す</b>。build_svc→ci_svcは変わらない。", nodes: { build_svc: "active", ci_svc: "active" }, edges: ["build_svc-ci_svc"], newEdges: ["ci_svc-admin"], tier: 2, verdict: "到達可能tier = <b>2</b>(たどり中)" },
+    { log: "ci_svcは今度はdeploy_svcだけでなく<b>admin</b>にもassumeできる(admin.delegate_to=\"ci_svc\")→この辺も辿る。", nodes: { build_svc: "active", ci_svc: "active", deploy_svc: "active", admin: "active" }, edges: ["build_svc-ci_svc", "ci_svc-deploy_svc", "ci_svc-admin"], tier: 3, verdict: "到達可能tier = <b>3</b>(admin相当、たどり中)" },
     { log: "到達可能な最大tierが<b>3</b>(admin相当)に上昇——意図された上限(2)を<span class=\"danger\">超過</span>。<b>権限昇格が成立</b>。誰も虚偽申告していないのに、2つの独立した正直なtrust宣言(build_svc→ci_svc、ci_svc→admin)がci_svcという1つの中継点を介して合成され、この経路が生まれた(confused deputy)。", nodes: { build_svc: "danger", ci_svc: "danger", deploy_svc: "safe", admin: "danger" }, edges: ["build_svc-ci_svc", "ci_svc-deploy_svc", "ci_svc-admin"], tier: 3, verdict: "到達可能tier = <b>3</b>(意図された上限2を<span class=\"danger\">超過</span>、権限昇格)", final: true }
   ];
 
@@ -314,6 +320,7 @@
   var chokepointTableEl = document.getElementById("chokepoint-table");
   var chokepointBodyEl = document.getElementById("chokepoint-body");
   var chokepointHintEl = document.getElementById("chokepoint-hint");
+  var chokepointFootnoteEl = document.getElementById("chokepoint-footnote");
 
   function nodeEl(id) { return document.querySelector('.node[data-node="' + id + '"]'); }
   function edgeEl(id) { return document.querySelector('.edge[data-edge="' + id + '"]'); }
@@ -351,7 +358,7 @@
       if (resolved[id]) {
         var el = nodeEl(id);
         el.setAttribute("class", "node state-" + resolved[id]);
-        var tagText = resolved[id] === "safe" ? "SAFE" : resolved[id] === "danger" ? "昇格" : resolved[id] === "active" ? "探索中" : "—";
+        var tagText = resolved[id] === "safe" ? "SAFE" : resolved[id] === "danger" ? "昇格" : resolved[id] === "active" ? "たどり中" : "—";
         el.querySelector(".tag").textContent = tagText;
       }
     });
@@ -387,6 +394,7 @@
     if (st.final) {
       chokepointHintEl.style.display = "none";
       chokepointTableEl.style.display = "";
+      chokepointFootnoteEl.style.display = "";
       chokepointBodyEl.innerHTML = "";
       chokepointRanking.forEach(function (row, i) {
         var tr = document.createElement("tr");
@@ -401,6 +409,7 @@
     } else {
       chokepointHintEl.style.display = "";
       chokepointTableEl.style.display = "none";
+      chokepointFootnoteEl.style.display = "none";
     }
 
     document.getElementById("btn-prev").disabled = current === 0;
