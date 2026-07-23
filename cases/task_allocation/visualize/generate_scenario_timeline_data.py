@@ -39,7 +39,7 @@ from deviation_test import run_three_scene_demo
 
 def compute_three_scene_demo(config: dict) -> dict:
     env_config = EnvironmentConfig(**config["environment"])
-    engine = SingleItemVcgEngine(SingleItemVcgParameters(reserve_price=0.0))
+    engine = SingleItemVcgEngine(SingleItemVcgParameters(**config["mechanism"]))
     termination = TerminationConfig(**config["aggregation"])
     agent_ids = ["alice", "bob", "carol"]
     scene1_rounds, scene2_rounds = 5, 5

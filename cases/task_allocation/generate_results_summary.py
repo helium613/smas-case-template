@@ -146,7 +146,7 @@ def main() -> None:
         config = yaml.safe_load(f)
 
     env_config = EnvironmentConfig(**config["environment"])
-    engine = SingleItemVcgEngine(SingleItemVcgParameters(reserve_price=0.0))
+    engine = SingleItemVcgEngine(SingleItemVcgParameters(**config["mechanism"]))
     termination = TerminationConfig(**config["aggregation"])
     n_trials = config["verification_kit"]["monte_carlo_trials"]
 

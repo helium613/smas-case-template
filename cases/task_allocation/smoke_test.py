@@ -70,7 +70,7 @@ def main() -> None:
     check("①環境層: 減衰関数により重みが1.0未満に減衰する", 0.0 < weight < 1.0)
 
     # --- ②誘因構造層: サンプルのVCG(セカンドプライス)実装 ------------------
-    engine = SingleItemVcgEngine(SingleItemVcgParameters(reserve_price=0.0))
+    engine = SingleItemVcgEngine(SingleItemVcgParameters(**config["mechanism"]))
     declarations = [
         Declaration(agent_id="alice", declared_value=10.0),
         Declaration(agent_id="bob", declared_value=7.0),
