@@ -308,7 +308,7 @@
         8.0
       ]
     ],
-    "note": "「信用枠のX倍を常に申告する」固定戦略を30ラウンド貫いた場合の割引後合計効用(run_sustained_strategy_comparisonと同じ手法、D-38)。倍率1.0(信用枠ちょうど)でピーク(98.87)を迎え、honestの合計効用(47.704)を大きく上回る——D-37/D-38の発見そのもの。倍率が1.0をわずかでも超えると違反として検出され、制裁で効用が崖のように落ちる(8.0まで低下)。"
+    "note": "「信用枠のX倍を常に申告する」固定戦略を30ラウンド貫いた場合の割引後合計効用(run_sustained_strategy_comparisonと同じ手法、D-38)。倍率1.0(信用枠ちょうど)でピーク(98.87)を迎え、正直申告の合計効用(47.704)を大きく上回る——D-37/D-38の発見そのもの。倍率が1.0をわずかでも超えると違反として検出され、制裁で効用が崖のように落ちる(8.0まで低下)。"
   }
 };
   /* GRADIENT_DATA_END */
@@ -410,12 +410,12 @@
     if (data.honestX !== undefined) {
       var hx = scaleX(data.honestX);
       parts.push('<line class="honest-line" x1="' + hx + '" y1="' + MARGIN.top + '" x2="' + hx + '" y2="' + (H - MARGIN.bottom) + '"></line>');
-      parts.push('<text class="honest-label" x="' + (hx + 6) + '" y="' + (MARGIN.top + 14) + '">正直申告 (' + data.honestX + ')</text>');
+      parts.push('<text class="honest-label" x="' + (hx + 6) + '" y="' + (MARGIN.top + 14) + '">正直申告(入力値) ' + data.honestX + '</text>');
     }
     if (data.honestY !== undefined) {
       var hy = scaleY(data.honestY);
       parts.push('<line class="honest-line" x1="' + MARGIN.left + '" y1="' + hy + '" x2="' + (W - MARGIN.right) + '" y2="' + hy + '"></line>');
-      parts.push('<text class="honest-label" x="' + (W - MARGIN.right - 4) + '" y="' + (hy - 6) + '" text-anchor="end">honest (' + data.honestY + ')</text>');
+      parts.push('<text class="honest-label" x="' + (W - MARGIN.right - 4) + '" y="' + (hy - 6) + '" text-anchor="end">正直申告を貫いた場合(結果) ' + data.honestY + '</text>');
     }
 
     // curve
