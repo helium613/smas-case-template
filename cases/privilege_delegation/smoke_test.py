@@ -22,6 +22,7 @@ from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
 from verification_kit.information_asymmetry import LeakDetectingAgent, no_intra_round_leak, total_checks
 
+from analysis import rank_chokepoint_edges
 from delegation_agents import TrustDeclaringAgent
 from deviation_test import run_scene, run_three_scene_demo
 
@@ -153,6 +154,31 @@ def main() -> None:
         "シーン3(根本原因の特定、反実仮想): 注入した1件のtrust宣言(admin→ci_svc)"
         "だけを取り除くと、権限昇格経路は完全に消える",
         esc_report.root_cause_confirmed,
+    )
+
+    # --- chokepointランキング: どのtrust宣言を1件取り除けば最も効果的に解消できるか ---
+    chokepoints = rank_chokepoint_edges(engine, scenes[-1].declarations)
+    check(
+        "chokepointランキング: 最も効果的なedge(注入されたadmin→ci_svc)が1位にランク"
+        "され、build_svc・ci_svc両方の昇格を解消する",
+        chokepoints[0].truster_agent_id == "admin"
+        and chokepoints[0].trusted_agent_id == "ci_svc"
+        and set(chokepoints[0].resolved_agent_ids) == {"build_svc", "ci_svc"},
+    )
+    check(
+        "chokepointランキング: 昇格経路に無関係なedge(deploy_svc→ci_svc)を取り除いても"
+        "昇格は一切解消しない(0件、優先度が正しく最下位になる)",
+        any(
+            c.truster_agent_id == "deploy_svc" and c.trusted_agent_id == "ci_svc" and c.escalations_resolved == 0
+            for c in chokepoints
+        ),
+    )
+    print(
+        "       (chokepointランキング: "
+        + ", ".join(
+            f"{c.truster_agent_id}→{c.trusted_agent_id}(解消{c.escalations_resolved}件)" for c in chokepoints
+        )
+        + ")"
     )
 
     # --- 情報の非対称性の制御(#3、D-59の横展開) -------------------------------------
