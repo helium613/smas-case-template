@@ -1,4 +1,4 @@
-# ①環境層・③集約層のパラメータ(ケースごとに値を調整する)
+# ①環境層・②誘因構造層・③集約層のパラメータ(ケースごとに値を調整する)
 # 構造(キー)は共通、値はケース依存(smas_project_spec.md 3章)
 
 environment:
@@ -9,6 +9,12 @@ environment:
 aggregation:
   max_iterations: 1          # 1回性メカニズムの既定値。繰り返しケースでは調整する
   timeout_seconds: 5.0
+
+# ②誘因構造層: VCG(セカンドプライス)のパラメータ。他ケースとの二層分離を
+# 揃えるため追加(以前は smoke_test.py 等の呼び出し側にreserve_price=0.0を
+# ハードコードしていた、後日の会話で発覚した不整合の解消)
+mechanism:
+  reserve_price: 0.0
 
 # 検証キットの設定
 verification_kit:

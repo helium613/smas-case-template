@@ -44,7 +44,7 @@ def main() -> int:
         config = yaml.safe_load(f)
 
     env = EnvironmentClient(EnvironmentConfig(**config["environment"]))
-    engine = SingleItemVcgEngine(SingleItemVcgParameters(reserve_price=0.0))
+    engine = SingleItemVcgEngine(SingleItemVcgParameters(**config["mechanism"]))
 
     agents = [
         HonestRuleBasedAgent("alice", true_value=10.0),
