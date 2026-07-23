@@ -22,7 +22,7 @@ D-23。リポジトリ名も、この実態(単なるテンプレートではな
 
 ## ケース一覧
 
-5つのケースは、メカニズムファミリー(支払いあり/なし、1回性/繰り返し、投票/委任等)を
+6つのケースは、メカニズムファミリー(支払いあり/なし、1回性/繰り返し、投票/委任等)を
 意図的に変えながら、同じ5層構造がどこまで無変更で使い回せるかを実証する。
 
 | ケース | ディレクトリ | メカニズム | 状態 |
@@ -32,9 +32,12 @@ D-23。リポジトリ名も、この実態(単なるテンプレートではな
 | 3. 投票による共同意思決定 | [`cases/proposal_voting/`](./cases/proposal_voting) | ボルダ得点(投票、支払いなし、非耐戦略性) | 完走(2シーン構成、LangGraph実地検証・意図的な非耐戦略性の実証を含む) |
 | 4. Liquid Democracy | [`cases/liquid_democracy/`](./cases/liquid_democracy) | 委任民主主義(委任連鎖、支払いなし) | 完走(3シーン構成、循環委任の検出・重みの保存則・#19の初検証を含む) |
 | 5. IAM委任チェーンの権限昇格 | [`cases/privilege_delegation/`](./cases/privilege_delegation) | AssumeRole型信頼グラフの到達可能性(委任・権限移譲、支払いなし) | 完走(3シーン構成。**誰も虚偽申告していないのに、複数の正直な宣言の合成が権限昇格を生む**「confused deputy」という、他4ケースとは異なる種類の望ましくない性質を実証。chokepointランキング・候補trust宣言の総当たりスキャン・blast radius計算という3種の意思決定支援ツールを同梱、D-60〜D-70) |
+| 6. 予算委任チェーン | [`cases/budget_delegation/`](./cases/budget_delegation) | 部分委任・目減り型の予算委任(委任・権限移譲、支払いなし) | 完走(3シーン構成。ケース5と同じconfused deputyを、重み保存(ケース4)でも完全継承(ケース5)でもない「部分譲渡・SUM集約」という第3の数理構造で実証。可視化は別リポジトリ`smas-confused-deputy`が薄いラッパーとして担当、D-78) |
 
 ケース5は、SMASと隣接する別アーキタイプ「信頼委任システム」との境界を検討する
 過程で生まれた(詳細は[`docs/architecture_family_map.md`](./docs/architecture_family_map.md) 2.6節)。
+ケース6は、実践ケース実装フェーズ(別リポジトリ`smas-confused-deputy`・`smas-self-enforcing-scm`)の
+基盤として先行実装した(D-78)。
 
 ## セットアップ
 
@@ -49,7 +52,7 @@ python cases/task_allocation/smoke_test.py   # ①〜⑤の疎通を確認する
 固有)への入り口。ブラウザで直接開ける、単一HTMLファイル群(Reactなし・npmなし、
 バニラJS+SVG)。
 
-- **ケース横断**: [`visualize/cross_case.html`](./visualize/cross_case.html)(5大指標×ケース、実行主体層別ダッシュボード、評価観点25項目、レポート全文ビューア。現状ケース1〜4のみ対応、ケース5の統合は未着手、D-66)、[`visualize/incentive_gradient.html`](./visualize/incentive_gradient.html)(申告値・戦略の強さをスイープした効用カーブで「制度の穴」を可視化、D-56)
+- **ケース横断**: [`visualize/cross_case.html`](./visualize/cross_case.html)(5大指標×ケース、実行主体層別ダッシュボード、評価観点25項目、レポート全文ビューア。ケース1〜5対応(D-74)、ケース6は可視化を持たないため未統合)、[`visualize/incentive_gradient.html`](./visualize/incentive_gradient.html)(申告値・戦略の強さをスイープした効用カーブで「制度の穴」を可視化、D-56)
 - **ケース固有**: 各ケースの実際に発生したシーンの推移(`scenario_timeline.html`)、委任・trust関係のグラフ構造(`delegation_resolver.html`・`trust_graph.html`)。ケース5には、`cases/privilege_delegation/analysis.py`(chokepointランキング・候補trust宣言の総当たりスキャン・blast radius計算)という、事後分析+事前チェック+インシデント対応の意思決定支援ツールも同梱(D-64/D-65/D-70)
 
 ## ディレクトリ構成(責務分離版、CLAUDE.md 4章に対応)

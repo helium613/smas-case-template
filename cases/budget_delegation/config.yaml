@@ -1,0 +1,37 @@
+# ①環境層・②誘因構造層・③集約層のパラメータ(ケース6: 予算委任チェーン)
+# 構造(キー)は他ケースと共通、値はケース依存(smas_project_spec.md 3章、D-76の
+# 二層分離の教訓を踏まえ、mechanismセクションを最初から用意する)
+
+environment:
+  half_life_rounds: 8.0
+  max_trace_age_rounds: 50
+
+aggregation:
+  max_iterations: 1
+  timeout_seconds: 5.0
+
+# ②誘因構造層: 予算委任チェーンのパラメータ。
+#
+# パラメータ選定の根拠: me(パーソナルエージェント本体)が旅行手配全体に
+# ¥50,000を保有し、bookingへ委任する。bookingの実際の用途(宿泊予約)には
+# ¥45,000で足りるが、intended_max_budgetはme自身が受け取る全額(¥50,000)を
+# 上限として許容する(「委任元は自分の予算をそのまま持っていてよい」という
+# 設計判断)。transport(送迎手配)の実際の用途には¥2,000で足りる。
+# dining(会食手配)は今回のシナリオでは誰からも委任を受けない、常に安全な
+# 対照エージェント(ケース5のintern_svcと同じ役割)。
+mechanism:
+  root_budgets:
+    me: 50000.0
+    booking: 0.0
+    transport: 0.0
+    dining: 0.0
+  intended_max_budget:
+    me: 50000.0
+    booking: 45000.0
+    transport: 2000.0
+    dining: 1500.0
+  max_chain_depth: 10
+
+# 検証キットの設定
+verification_kit:
+  monte_carlo_trials: 500
