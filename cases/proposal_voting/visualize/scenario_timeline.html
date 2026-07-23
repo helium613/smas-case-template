@@ -1,0 +1,440 @@
+<title>シーンの推移 — 投票(ボルダ得点)</title>
+<style>
+  :root {
+    --bg: #f3f1ec; --panel: #ffffff; --panel-2: #ece9e2; --border: #d8d3c8;
+    --text: #23211d; --text-muted: #6b6558; --text-faint: #a29c8c;
+    --actual: #b2502a; --actual-bg: #f6e4da;
+    --cf: #3a6ea8; --cf-bg: #dde7f2;
+    --accent-active: #b8860f; --accent-active-bg: #f7ecd0;
+    --scene-build: #e2ded2; --scene-deviate: #f3d9cf;
+    --shadow: 0 1px 2px rgba(35,33,29,0.06), 0 8px 24px rgba(35,33,29,0.06);
+    --font-display: -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", "Consolas", "Menlo", monospace;
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161b; --panel: #1b1e25; --panel-2: #21242c; --border: #2e323c;
+    --text: #e9e6de; --text-muted: #97917f; --text-faint: #6b6658;
+    --actual: #ec8c62; --actual-bg: #3a2419;
+    --cf: #7ba7d9; --cf-bg: #1c2c3d;
+    --accent-active: #e8bc4e; --accent-active-bg: #382d13;
+    --scene-build: #262a33; --scene-deviate: #3a2a24;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161b; --panel: #1b1e25; --panel-2: #21242c; --border: #2e323c;
+      --text: #e9e6de; --text-muted: #97917f; --text-faint: #6b6658;
+      --actual: #ec8c62; --actual-bg: #3a2419;
+      --cf: #7ba7d9; --cf-bg: #1c2c3d;
+      --accent-active: #e8bc4e; --accent-active-bg: #382d13;
+      --scene-build: #262a33; --scene-deviate: #3a2a24;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-display); padding: 28px; }
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+  header { display: flex; flex-direction: column; gap: 6px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); }
+  h1 { font-size: 24px; font-weight: 650; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .sub { color: var(--text-muted); font-size: 14px; max-width: 68ch; line-height: 1.55; margin: 2px 0 0; }
+  .sub code { font-family: var(--font-mono); font-size: 12.5px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+
+  .scenario-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+  .scenario-btn {
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+    padding: 7px 12px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text-muted); cursor: pointer;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .scenario-btn:hover { border-color: var(--accent-active); color: var(--text); }
+  .scenario-btn.active { background: var(--accent-active-bg); border-color: var(--accent-active); color: var(--accent-active); }
+  .scenario-btn:focus-visible { outline: 2px solid var(--accent-active); outline-offset: 2px; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+
+  .controls { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  button {
+    font-family: var(--font-display); font-size: 13px; font-weight: 600; border-radius: 7px; padding: 7px 13px;
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer;
+    transition: background 150ms ease, border-color 150ms ease, transform 80ms ease;
+  }
+  button:hover { border-color: var(--accent-active); }
+  button:active { transform: translateY(1px); }
+  button:focus-visible { outline: 2px solid var(--accent-active); outline-offset: 2px; }
+  button.primary { background: var(--accent-active); border-color: var(--accent-active); color: #22190a; }
+  .round-count { margin-left: auto; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+  .scrubber-wrap { padding: 4px 16px 0; }
+  input[type="range"] { width: 100%; accent-color: var(--accent-active); }
+
+  .charts { padding: 14px 18px 4px; }
+  .chart-label { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin: 6px 0 2px; }
+  svg.chart { width: 100%; height: auto; display: block; }
+  .gridline { stroke: var(--border); stroke-width: 1; }
+  .axis-label { font-family: var(--font-mono); font-size: 9.5px; fill: var(--text-faint); }
+  .line-actual { fill: none; stroke: var(--actual); stroke-width: 2.2; }
+  .line-cf { fill: none; stroke: var(--cf); stroke-width: 2; stroke-dasharray: 5 3; }
+  .dot-actual { fill: var(--actual); }
+  .dot-cf { fill: var(--cf); }
+  .now-line { stroke: var(--accent-active); stroke-width: 1.4; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px 20px; padding: 10px 18px 16px; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .swatch-line { width: 16px; height: 2px; border-radius: 2px; }
+  .swatch-line.actual { background: var(--actual); }
+  .swatch-band { width: 11px; height: 11px; border-radius: 3px; }
+
+  .side { display: flex; flex-direction: column; gap: 14px; }
+  .detail { padding: 14px 16px; }
+  .detail h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin: 0 0 10px; font-weight: 650; }
+  .detail-row { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-row .k { color: var(--text-muted); }
+  .detail-row .v { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pill { display: inline-flex; align-items: center; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
+  .pill.ok { background: var(--cf-bg); color: var(--cf); }
+  .pill.bad { background: var(--actual-bg); color: var(--actual); }
+
+  .scene-tag { display: inline-flex; align-items: center; font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+
+  .summary { padding: 14px 16px; border-top: 1px solid var(--border); }
+  .summary h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin: 0 0 10px; font-weight: 650; }
+  .summary-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+  .summary-row .v { font-family: var(--font-mono); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .summary-row.actual .v { color: var(--actual); }
+  .summary-row.cf .v { color: var(--cf); }
+  .verdict { margin-top: 10px; padding: 9px 11px; border-radius: 7px; background: var(--panel-2); border: 1px solid var(--border); font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+  .verdict b { color: var(--text); }
+
+  .source { padding: 12px 16px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); line-height: 1.6; }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">SMAS — cases/proposal_voting — 可視化プロトタイプ</span>
+    <h1>シーンの推移を、実際に発生した通りに見る</h1>
+    <p class="sub">
+      <code>generate_scenario_timeline_data.py</code> が実際に計算した、bobの埋葬戦術(上、
+      真の2位候補を申告の何位に置いたか)と累積効用(下)のラウンドごとの推移。数値は捏造せず、
+      実行結果をそのまま使用。
+    </p>
+  </header>
+
+  <div class="scenario-picker" id="scenario-picker"></div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="controls">
+        <button id="btn-reset">最初から</button>
+        <button id="btn-prev">◂ 戻る</button>
+        <button id="btn-play" class="primary">▸ 再生</button>
+        <button id="btn-next">次へ ▸</button>
+        <span class="round-count" id="round-count"></span>
+      </div>
+      <div class="scrubber-wrap">
+        <input type="range" id="scrubber" min="0" max="1" value="0" step="1" aria-label="ラウンド">
+      </div>
+      <div class="charts">
+        <div class="chart-label" id="top-chart-label"></div>
+        <svg class="chart" id="chart-top" viewBox="0 0 760 190" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="chart-label">累積効用</div>
+        <svg class="chart" id="chart-utility" viewBox="0 0 760 190" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="side">
+      <div class="panel">
+        <div class="detail">
+          <h2>このラウンド</h2>
+          <div id="detail-body"></div>
+        </div>
+        <div class="summary">
+          <h2 id="summary-title">最終結果</h2>
+          <div id="summary-body"></div>
+          <div class="verdict" id="verdict"></div>
+        </div>
+        <div class="source" id="source"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* SCENARIOS_DATA_START (generate_scenario_timeline_data.py が機械的に更新する、手編集禁止) */
+  var SCENARIOS = {
+  "two_scene_demo": {
+    "label": "2シーンデモ(埋葬戦術 vs 反実仮想honest)",
+    "hasCounterfactual": true,
+    "scenes": [
+      {
+        "name": "scene1_honest",
+        "label": "平常時",
+        "rounds": [
+          1,
+          5
+        ],
+        "color": "var(--scene-build)"
+      },
+      {
+        "name": "scene2_manipulation_injected",
+        "label": "逸脱注入(埋葬戦術)",
+        "rounds": [
+          6,
+          10
+        ],
+        "color": "var(--scene-deviate)"
+      }
+    ],
+    "N": 10,
+    "topChartLabel": "bobの申告順位におけるproposal_a(真の2位)の位置",
+    "topSeriesActual": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      4,
+      4,
+      4,
+      4,
+      4
+    ],
+    "wonActual": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ],
+    "utilActual": [
+      6.0,
+      12.0,
+      18.0,
+      24.0,
+      30.0,
+      40.0,
+      50.0,
+      60.0,
+      70.0,
+      80.0
+    ],
+    "utilCf": [
+      6.0,
+      12.0,
+      18.0,
+      24.0,
+      30.0,
+      36.0,
+      42.0,
+      48.0,
+      54.0,
+      60.0
+    ],
+    "verdictText": "埋葬戦術は得になる(理論どおりの想定内の結果、D-27): シーン2の合計効用(実際=+50.00)は、正直申告を貫いた場合(反実仮想=+30.00)を明確に上回る——ボルダ得点は非耐戦略性メカニズムであり、真の2位候補を最下位に落とす単純な固定ルールだけで得をする、意図的に選んだ「悪い設計」の実例。"
+  }
+};
+  /* SCENARIOS_DATA_END */
+
+  var scenarioOrder = Object.keys(SCENARIOS);
+  var currentScenarioId = scenarioOrder[0];
+  var current = 0; // 0 = before round1
+  var playing = false;
+  var playTimer = null;
+
+  var scrubber = document.getElementById("scrubber");
+  var roundCount = document.getElementById("round-count");
+  var detailBody = document.getElementById("detail-body");
+  var chartTop = document.getElementById("chart-top");
+  var chartUtility = document.getElementById("chart-utility");
+
+  function scenario() { return SCENARIOS[currentScenarioId]; }
+
+  function sceneForRound(r) {
+    var s = scenario();
+    for (var i = 0; i < s.scenes.length; i++) {
+      if (r >= s.scenes[i].rounds[0] && r <= s.scenes[i].rounds[1]) return s.scenes[i];
+    }
+    return s.scenes[0];
+  }
+
+  function renderScenarioPicker() {
+    var picker = document.getElementById("scenario-picker");
+    picker.innerHTML = "";
+    if (scenarioOrder.length <= 1) { picker.style.display = "none"; return; }
+    scenarioOrder.forEach(function (id) {
+      var btn = document.createElement("button");
+      btn.className = "scenario-btn" + (id === currentScenarioId ? " active" : "");
+      btn.textContent = SCENARIOS[id].label;
+      btn.addEventListener("click", function () {
+        stopPlaying();
+        currentScenarioId = id;
+        current = 0;
+        var s = scenario();
+        scrubber.max = s.N;
+        renderScenarioPicker();
+        render();
+      });
+      picker.appendChild(btn);
+    });
+  }
+
+  function renderLegend() {
+    var s = scenario();
+    var parts = ['<span class="legend-item"><span class="swatch-line actual"></span>実際</span>'];
+    if (s.hasCounterfactual) {
+      parts.push('<span class="legend-item"><span class="swatch-line" style="border-top:2px dashed var(--cf);height:0;width:16px;"></span>遵守を貫いた場合(反実仮想)</span>');
+    }
+    var seen = {};
+    s.scenes.forEach(function (sc) {
+      if (seen[sc.label]) return;
+      seen[sc.label] = true;
+      parts.push('<span class="legend-item"><span class="swatch-band" style="background:' + sc.color + '"></span>' + sc.label + '</span>');
+    });
+    document.getElementById("legend").innerHTML = parts.join("");
+  }
+
+  function xScale(round, N) { return 44 + (round - 1) / (N - 1) * (760 - 44 - 12); }
+
+  function buildChart(svgEl, s, values, valuesCf, yScale, yTicks) {
+    var parts = [];
+    var N = s.N;
+    s.scenes.forEach(function (sc) {
+      var x0 = xScale(sc.rounds[0], N) - (sc.rounds[0] === 1 ? 4 : 3);
+      var x1 = xScale(sc.rounds[1], N) + 3;
+      parts.push('<rect x="' + x0 + '" y="8" width="' + (x1 - x0) + '" height="160" fill="' + sc.color + '"></rect>');
+    });
+    yTicks.forEach(function (t) {
+      var y = yScale(t);
+      parts.push('<line class="gridline" x1="40" y1="' + y + '" x2="752" y2="' + y + '"></line>');
+      parts.push('<text class="axis-label" x="4" y="' + (y + 3) + '">' + t + "</text>");
+    });
+    var n = Math.max(current, 1);
+    var ptsActual = [], ptsCf = [];
+    for (var r = 1; r <= n; r++) {
+      ptsActual.push(xScale(r, N) + "," + yScale(values[r - 1]));
+      if (valuesCf) { ptsCf.push(xScale(r, N) + "," + yScale(valuesCf[r - 1])); }
+    }
+    if (current > 0) {
+      if (valuesCf) {
+        parts.push('<polyline class="line-cf" points="' + ptsCf.join(" ") + '"></polyline>');
+      }
+      parts.push('<polyline class="line-actual" points="' + ptsActual.join(" ") + '"></polyline>');
+      var lastR = current;
+      if (valuesCf) {
+        parts.push('<circle class="dot-cf" r="3" cx="' + xScale(lastR, N) + '" cy="' + yScale(valuesCf[lastR - 1]) + '"></circle>');
+      }
+      parts.push('<circle class="dot-actual" r="3.5" cx="' + xScale(lastR, N) + '" cy="' + yScale(values[lastR - 1]) + '"></circle>');
+      parts.push('<line class="now-line" x1="' + xScale(lastR, N) + '" y1="8" x2="' + xScale(lastR, N) + '" y2="168" stroke-dasharray="2 2"></line>');
+    }
+    svgEl.innerHTML = parts.join("");
+  }
+
+  function niceMax(values, valuesCf) {
+    var all = values.slice();
+    if (valuesCf) { all = all.concat(valuesCf); }
+    return Math.max.apply(null, all) * 1.15 || 1;
+  }
+
+  function render() {
+    var s = scenario();
+    var N = s.N;
+    scrubber.max = N;
+    scrubber.value = current;
+    roundCount.textContent = "ラウンド " + current + " / " + N;
+    document.getElementById("top-chart-label").textContent = s.topChartLabel;
+
+    var topMax = niceMax(s.topSeriesActual, s.topSeriesRef ? [s.topSeriesRef] : null);
+    var utilMax = niceMax(s.utilActual, s.utilCf);
+    function yScaleTop(v) { return 168 - (v / topMax) * 148; }
+    function yScaleUtil(v) { return 168 - (v / utilMax) * 148; }
+    var topTicks = [0, Math.round(topMax / 3), Math.round((topMax * 2) / 3)];
+    var utilTicks = [0, Math.round(utilMax / 3), Math.round((utilMax * 2) / 3)];
+
+    buildChart(chartTop, s, s.topSeriesActual, null, yScaleTop, topTicks);
+    buildChart(chartUtility, s, s.utilActual, s.utilCf, yScaleUtil, utilTicks);
+    renderLegend();
+
+    if (current === 0) {
+      detailBody.innerHTML = '<div class="detail-row"><span class="k">開始前</span><span class="v">再生かスクラバーで進めてください</span></div>';
+    } else {
+      var idx = current - 1;
+      var scene = sceneForRound(current);
+      var rows =
+        '<div class="detail-row"><span class="k">シーン</span><span class="scene-tag" style="background:' + scene.color + '">' + scene.label + '</span></div>' +
+        '<div class="detail-row"><span class="k">' + s.topChartLabel + '</span><span class="v">' + s.topSeriesActual[idx].toFixed(2) + '</span></div>' +
+        '<div class="detail-row"><span class="k">当選?</span><span class="v"><span class="pill ' + (s.wonActual[idx] ? "ok" : "bad") + '">' + (s.wonActual[idx] ? "YES" : "NO") + '</span></span></div>' +
+        '<div class="detail-row"><span class="k">累積効用(実際)</span><span class="v">' + s.utilActual[idx].toFixed(2) + '</span></div>';
+      if (s.utilCf) {
+        rows += '<div class="detail-row"><span class="k">累積効用(反実仮想)</span><span class="v">' + s.utilCf[idx].toFixed(2) + '</span></div>';
+      }
+      detailBody.innerHTML = rows;
+    }
+
+    document.getElementById("summary-title").textContent = "最終結果(ラウンド" + N + "時点)";
+    var summaryHtml = '<div class="summary-row actual"><span>実際</span><span class="v">' + s.utilActual[N - 1].toFixed(2) + '</span></div>';
+    if (s.utilCf) {
+      summaryHtml += '<div class="summary-row cf"><span>遵守を貫いた場合</span><span class="v">' + s.utilCf[N - 1].toFixed(2) + '</span></div>';
+    }
+    document.getElementById("summary-body").innerHTML = summaryHtml;
+    document.getElementById("verdict").innerHTML = s.verdictText;
+    document.getElementById("source").textContent = "出典: cases/proposal_voting/visualize/generate_scenario_timeline_data.py の実行結果";
+
+    document.getElementById("btn-prev").disabled = current === 0;
+    document.getElementById("btn-next").disabled = current === N;
+  }
+
+  function stopPlaying() {
+    playing = false;
+    document.getElementById("btn-play").textContent = "▸ 再生";
+    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+  }
+
+  document.getElementById("btn-next").addEventListener("click", function () {
+    var N = scenario().N;
+    if (current < N) { current++; render(); }
+    if (current === N) stopPlaying();
+  });
+  document.getElementById("btn-prev").addEventListener("click", function () {
+    stopPlaying();
+    if (current > 0) { current--; render(); }
+  });
+  document.getElementById("btn-reset").addEventListener("click", function () {
+    stopPlaying();
+    current = 0; render();
+  });
+  document.getElementById("btn-play").addEventListener("click", function () {
+    if (playing) { stopPlaying(); return; }
+    var N = scenario().N;
+    if (current >= N) current = 0;
+    playing = true;
+    document.getElementById("btn-play").textContent = "❚❚ 停止";
+    playTimer = setInterval(function () {
+      if (current >= scenario().N) { stopPlaying(); return; }
+      current++; render();
+    }, 260);
+  });
+  scrubber.addEventListener("input", function () {
+    stopPlaying();
+    current = parseInt(scrubber.value, 10);
+    render();
+  });
+
+  renderScenarioPicker();
+  render();
+})();
+</script>
