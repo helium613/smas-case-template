@@ -8,13 +8,15 @@
 意図的に許容しているため)。この分析群は、実際に運用する側が3つの場面で使う
 ことを想定する:
 
-1. **chokepointランキング(本ファイル、第一弾)**: 事後分析。既に発生した(または
-   発生しうる)権限昇格に対し、どのtrust宣言を1件取り除けば最も効果的に解消
-   できるかをランキングする——「根本原因の特定」(D-60のシーン3、注入した1件を
-   除く)を、任意のtrust設定に一般化したもの。限られた対応リソースをどこに
-   割くべきかの優先順位づけに使う。
-2. **What-if事前チェック(次の一手)**: 新しいtrust宣言を追加する"前"に、それが
-   昇格を生むかを判定する予防的ゲート。
+1. **chokepointランキング**: 事後分析。既に発生した(または発生しうる)権限昇格に
+   対し、どのtrust宣言を1件取り除けば最も効果的に解消できるかをランキングする
+   ——「根本原因の特定」(D-60のシーン3、注入した1件を除く)を、任意のtrust設定に
+   一般化したもの。限られた対応リソースをどこに割くべきかの優先順位づけに使う。
+2. **候補trust宣言の総当たりスキャン(本ファイル、第二弾)**: 事前チェック。
+   まだ存在しない新規trust宣言の候補を全て総当たりし、追加した場合に権限昇格を
+   新たに生む(または悪化させる)ものはどれかを一括で判定する。chokepointランキング
+   の逆方向(事後の原因特定ではなく、事前に危険な追加を洗い出す)。「1件ずつ
+   `What-if`を聞く」のではなく「安全な追加・危険な追加を全部リストアップする」形。
 3. **blast radius計算(次の一手)**: 特定のロールが侵害された場合に、現在の
    trust設定でどこまで到達しうるかを計算する、インシデント対応用の即時計算。
 """
@@ -49,8 +51,12 @@ class ChokepointResult:
     解消するedgeほど優先度が高い、という判断に使える)。"""
 
 
+def _excess_by_agent(reachable: dict[str, int], intended_max_tier: dict[str, int]) -> dict[str, int]:
+    return {agent_id: max(0, tier - intended_max_tier[agent_id]) for agent_id, tier in reachable.items()}
+
+
 def _total_excess(reachable: dict[str, int], intended_max_tier: dict[str, int]) -> int:
-    return sum(max(0, tier - intended_max_tier[agent_id]) for agent_id, tier in reachable.items())
+    return sum(_excess_by_agent(reachable, intended_max_tier).values())
 
 
 def _escalated_agents(reachable: dict[str, int], intended_max_tier: dict[str, int]) -> set[str]:
@@ -98,4 +104,91 @@ def rank_chokepoint_edges(
         )
 
     results.sort(key=lambda r: (r.excess_tier_reduced, r.escalations_resolved), reverse=True)
+    return results
+
+
+@dataclass
+class CandidateGrantResult:
+    """まだ存在しない新規trust宣言を1件追加した場合の効果(事前チェック)。"""
+
+    truster_agent_id: str
+    """新たにtrustを与える側(現在delegate_to=Noneのエージェント)。"""
+
+    trusted_agent_id: str
+    """新たに信頼される相手(truster_agent_idをassumeできるようになる側)。"""
+
+    newly_escalated_agent_ids: list[str]
+    """この追加によって、新たに権限昇格状態になるエージェントのID一覧。"""
+
+    worsened_agent_ids: list[str]
+    """既に権限昇格していたが、この追加でさらに超過tierが悪化するエージェント。"""
+
+    excess_introduced: int
+    """この追加によって新たに生まれる、超過tierの合計(新規昇格+既存昇格の悪化分)。
+    ランキングの並び順に使う——数値が大きいほど危険な追加。"""
+
+    is_safe: bool
+    """新規昇格も悪化も一切生まない(=追加しても安全)場合True。"""
+
+
+def scan_candidate_trust_grants(
+    engine: PrivilegeDelegationEngine, declarations: list[Declaration]
+) -> list[CandidateGrantResult]:
+    """まだtrustを与えていない(delegate_to=None)エージェントについて、
+    「もしこの相手を新たに信頼したら」という候補を総当たりし、権限昇格を
+    新たに生む危険な追加はどれかを一括でスキャンする(excess_introduced降順)。
+
+    rank_chokepoint_edgesの逆方向: あちらは「既存のedgeを取り除いたら」(事後・
+    根本原因の特定)、こちらは「まだ無いedgeを追加したら」(事前・危険な変更の
+    先回り検出)。delegate_toが既に設定されているエージェントについては、
+    「1対1の信頼」という現行スキーマの単純化(D-60)のもとでは「差し替え」に
+    なり「追加」ではないため、スキャン対象に含めない。計測のみ(実際にtrust
+    宣言を書き換えたり環境に書き込んだりはしない)。
+    """
+    baseline_reachable = engine.resolve_reachable_tiers(declarations)
+    baseline_excess = _excess_by_agent(baseline_reachable, engine.parameters.intended_max_tier)
+
+    by_agent = {d.agent_id: d for d in declarations}
+    agent_ids = list(engine.parameters.tiers.keys())
+    untrusting_agents = [a for a in agent_ids if by_agent.get(a) is None or by_agent[a].delegate_to is None]
+
+    results: list[CandidateGrantResult] = []
+    for truster in untrusting_agents:
+        for trusted in agent_ids:
+            if trusted == truster:
+                continue
+            modified = [
+                Declaration(
+                    agent_id=d.agent_id,
+                    delegate_to=(trusted if d.agent_id == truster else d.delegate_to),
+                )
+                for d in declarations
+            ]
+            reachable_with = engine.resolve_reachable_tiers(modified)
+            excess_with = _excess_by_agent(reachable_with, engine.parameters.intended_max_tier)
+
+            newly_escalated = sorted(
+                a for a, e in excess_with.items() if e > 0 and baseline_excess.get(a, 0) == 0
+            )
+            worsened = sorted(
+                a for a, e in excess_with.items() if baseline_excess.get(a, 0) > 0 and e > baseline_excess[a]
+            )
+            excess_introduced = sum(
+                excess_with[a] - baseline_excess.get(a, 0)
+                for a in excess_with
+                if excess_with[a] > baseline_excess.get(a, 0)
+            )
+
+            results.append(
+                CandidateGrantResult(
+                    truster_agent_id=truster,
+                    trusted_agent_id=trusted,
+                    newly_escalated_agent_ids=newly_escalated,
+                    worsened_agent_ids=worsened,
+                    excess_introduced=excess_introduced,
+                    is_safe=(not newly_escalated and not worsened),
+                )
+            )
+
+    results.sort(key=lambda r: r.excess_introduced, reverse=True)
     return results
