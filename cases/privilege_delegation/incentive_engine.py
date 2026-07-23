@@ -54,8 +54,8 @@ class PrivilegeDelegationEngine:
         self.parameters = parameters
         self.version = version
 
-    def resolve_reachable_tiers(self, declarations: list[Declaration]) -> dict[str, int]:
-        """各エージェントが到達可能な最大tierを計算する。
+    def reachable_agent_ids(self, declarations: list[Declaration], start_agent_id: str) -> set[str]:
+        """start_agent_idが(直接・間接に)assumeできる全エージェントを返す(自分自身を含む)。
 
         辺の向き: `declaration.delegate_to == P` というエージェントQの申告は、
         「QはPからassumeされることを信頼する」、すなわち「PはQをassumeできる
@@ -64,29 +64,34 @@ class PrivilegeDelegationEngine:
         相手"を再帰的にたどる(assumeしたIDでさらに連鎖できる、実際のAssumeRole
         チェーンと同じ多段委任)。訪問済み集合でループを防止し、max_chain_depthで
         打ち切る。
+
+        `resolve_reachable_tiers`(tierの要約値のみ返す)の内部計算を公開したもの。
+        `analysis.py`のchokepoint分析・blast radius計算等、具体的な到達先の一覧
+        そのものを必要とする事後/事前チェックから再利用する。
         """
         by_delegate_to: dict[str, list[str]] = {}
         for d in declarations:
             if d.delegate_to is not None:
                 by_delegate_to.setdefault(d.delegate_to, []).append(d.agent_id)
 
-        def reachable_nodes(start: str) -> set[str]:
-            visited = {start}
-            frontier = [start]
-            depth = 0
-            while frontier and depth < self.parameters.max_chain_depth:
-                next_frontier = []
-                for node in frontier:
-                    for nxt in by_delegate_to.get(node, []):
-                        if nxt not in visited:
-                            visited.add(nxt)
-                            next_frontier.append(nxt)
-                frontier = next_frontier
-                depth += 1
-            return visited
+        visited = {start_agent_id}
+        frontier = [start_agent_id]
+        depth = 0
+        while frontier and depth < self.parameters.max_chain_depth:
+            next_frontier = []
+            for node in frontier:
+                for nxt in by_delegate_to.get(node, []):
+                    if nxt not in visited:
+                        visited.add(nxt)
+                        next_frontier.append(nxt)
+            frontier = next_frontier
+            depth += 1
+        return visited
 
+    def resolve_reachable_tiers(self, declarations: list[Declaration]) -> dict[str, int]:
+        """各エージェントが到達可能な最大tierを計算する(`reachable_agent_ids`の要約)。"""
         return {
-            agent_id: max(self.parameters.tiers[n] for n in reachable_nodes(agent_id))
+            agent_id: max(self.parameters.tiers[n] for n in self.reachable_agent_ids(declarations, agent_id))
             for agent_id in self.parameters.tiers
         }
 

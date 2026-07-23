@@ -28,7 +28,7 @@ from schemas.environment_schema import EnvironmentConfig
 from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
 
-from analysis import rank_chokepoint_edges, scan_candidate_trust_grants
+from analysis import compute_blast_radius, rank_chokepoint_edges, scan_candidate_trust_grants
 from delegation_agents import TrustDeclaringAgent
 from deviation_test import run_scene, run_three_scene_demo
 from incentive_engine import PrivilegeDelegationEngine, PrivilegeDelegationParameters
@@ -111,6 +111,11 @@ def main() -> None:
     candidate_scan_elapsed = time.perf_counter() - t0
     dangerous_candidates = [c for c in candidates if not c.is_safe]
     top_candidate = candidates[0]
+
+    # --- blast radius計算: 特定のロールが今侵害されたら、どこまで到達しうるか ---------
+    t0 = time.perf_counter()
+    build_svc_blast = compute_blast_radius(engine, scenes[-1].declarations, "build_svc")
+    blast_radius_elapsed = time.perf_counter() - t0
 
     # --- ⑤: DisCoPy構造検証 -----------------------------------------------------------
     t0 = time.perf_counter()
@@ -239,6 +244,15 @@ def main() -> None:
         f"(4件全てis_safe=False)、intern_svc(最下位tier)が誰を信頼しても必ず安全"
         f"(4件全てis_safe=True)という、tierの位置と危険度の構造的な対応も確認できた。"
     )
+    lines.append(
+        f"- **blast radius計算(インシデント対応)**: chokepointランキング(事後)・候補"
+        f"スキャン(事前)とは異なる第3の視点として、`compute_blast_radius`で「build_svcの"
+        f"資格情報が今まさに侵害されたら」を計算した。到達範囲は"
+        f"{build_svc_blast.reachable_agent_ids}、想定外の被害範囲(intended_max_tier="
+        f"{build_svc_blast.intended_max_tier}を超過)は{build_svc_blast.escalation_exposure}"
+        f"——インシデント対応の現場で「build_svcの資格情報を今すぐローテーションすべきか」"
+        f"だけでなく「adminも連鎖的に監査対象に含めるべきか」を即座に判断する材料になる。"
+    )
     lines.append("")
 
     lines.append("### ④資源コスト: 計算量・実行時間の概算(このマシンでの1回計測、参考値)")
@@ -246,6 +260,7 @@ def main() -> None:
     lines.append(f"- モンテカルロ N={mc_summary['n_trials']}試行(6エージェント、ランダムtrust配線): 実測 {montecarlo_elapsed:.3f} 秒")
     lines.append(f"- chokepointランキング({len(chokepoints)}件のtrust宣言を評価): 実測 {chokepoint_elapsed * 1000:.2f} ms")
     lines.append(f"- 候補trust宣言の総当たりスキャン({len(candidates)}件の候補を評価): 実測 {candidate_scan_elapsed * 1000:.2f} ms")
+    lines.append(f"- blast radius計算(1エージェント分): 実測 {blast_radius_elapsed * 1000:.2f} ms")
     lines.append(f"- ⑤DisCoPy構造検証: 実測 {verification_elapsed * 1000:.2f} ms")
     lines.append("- 資源コスト(#24): 分散台帳・検証可能遅延関数等の本番運用コストは技術選定が未決のため対象外。")
     lines.append("")
@@ -303,6 +318,7 @@ def main() -> None:
         f"③モンテカルロ昇格率={mc_summary['escalation_rate']:.1%} / "
         f"③chokepoint1位={top_chokepoint.truster_agent_id}→{top_chokepoint.trusted_agent_id} / "
         f"③危険な候補={len(dangerous_candidates)}/{len(candidates)} / "
+        f"③build_svc blast radius={build_svc_blast.reachable_agent_ids} / "
         f"⑤DisCoPy={disco_py_pass}"
     )
 
