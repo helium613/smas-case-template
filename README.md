@@ -40,7 +40,7 @@ python cases/task_allocation/smoke_test.py   # ①〜⑤の疎通を確認する
 | 検証キット(共通部分) | `verification_kit/montecarlo.py`・`mdp_convergence.py`・`gambit_collusion.py` | 共通実装(リポジトリルート) |
 | 検証キット(Quint) | `cases/<ケース名>/quint/` | ケースごとの状態機械を記述するため、ケース固有 |
 | パラメータ | `cases/<ケース名>/config.yaml` | 構造は`schemas/environment_schema.py`で共通、値はケースごとに調整する |
-| 可視化(ケース横断) | `visualize/` | 共通実装(リポジトリルート)。4ケース共通の5層パイプラインや5大指標ダッシュボードなど、ケースをまたぐ視点の可視化。Reactなし・npmなし、バニラJS+SVGの単一HTMLファイル。`visualize/embed_reports.py`は各ケースの`results/summary.md`全文を機械的に埋め込む(手転記しない、D-52)。ケースのレポートを再生成したら、このスクリプトも再実行する |
+| 可視化(ケース横断) | `visualize/` | 共通実装(リポジトリルート)。4ケース共通の5層パイプラインや5大指標ダッシュボードなど、ケースをまたぐ視点の可視化。Reactなし・npmなし、バニラJS+SVGの単一HTMLファイル。`visualize/embed_reports.py`は各ケースの`results/summary.md`全文を機械的に埋め込む(手転記しない、D-52)。ケースのレポートを再生成したら、このスクリプトも再実行する。`visualize/incentive_gradient.html`(+`generate_incentive_gradient_data.py`)は、申告値・戦略の強さをスイープした効用カーブで「制度の穴」を可視化する(D-56) |
 | 可視化(ケース固有) | `cases/<ケース名>/visualize/` | ケースごとに書く。例: `cases/liquid_democracy/visualize/delegation_resolver.html`(委任連鎖の解決過程、1ラウンドの内部処理)、`cases/credit_allocation/visualize/scenario_timeline.html`(4シーンデモの全38ラウンドの推移、複数ラウンドにわたる実行プロセス) |
 
 ## 新しいケースを追加する手順
