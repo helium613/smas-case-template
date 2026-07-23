@@ -24,6 +24,7 @@ from schemas.environment_schema import EnvironmentConfig, Trace
 from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
 from verification_kit.gambit_collusion import check_pure_nash_collusion
+from verification_kit.information_asymmetry import LeakDetectingAgent, no_intra_round_leak, total_checks
 
 
 def check(label: str, condition: bool) -> None:
@@ -130,7 +131,8 @@ def main() -> None:
         DelegatingAgent("dave", "carol"),
         DelegatingAgent("erin", "bob"),
     ]
-    scene1 = run_scene("scene1_faithful_delegation", scene1_agents, engine, scene1_env, termination)
+    leak_scene1_agents = [LeakDetectingAgent(a, scene1_env) for a in scene1_agents]
+    scene1 = run_scene("scene1_faithful_delegation", leak_scene1_agents, engine, scene1_env, termination)
     true_preferences = {"alice": "yes", "bob": "no", "carol": "yes", "dave": "yes", "erin": "no"}
     check(
         "シーン1: 重みの保存則(有効+無効の合計=参加者数)が成立する",
@@ -150,7 +152,8 @@ def main() -> None:
         DelegatingAgent("grace", "heidi"),
         DelegatingAgent("heidi", "frank"),
     ]
-    scene2 = run_scene("scene2_cycle_injected", scene2_agents, engine, scene2_env, termination)
+    leak_scene2_agents = [LeakDetectingAgent(a, scene2_env) for a in scene2_agents]
+    scene2 = run_scene("scene2_cycle_injected", leak_scene2_agents, engine, scene2_env, termination)
     check(
         "シーン2: 循環委任の3者(frank/grace/heidi)は無効票になり、他者の票に影響しない",
         scene2.resolved["frank"] is None
@@ -174,7 +177,8 @@ def main() -> None:
         DelegatingAgent("q4", "priya"),
         DirectVotingAgent("r1", "no"),
     ]
-    scene3 = run_scene("scene3_super_delegate", scene3_agents, engine, scene3_env, termination)
+    leak_scene3_agents = [LeakDetectingAgent(a, scene3_env) for a in scene3_agents]
+    scene3 = run_scene("scene3_super_delegate", leak_scene3_agents, engine, scene3_env, termination)
     priya_weight = sum(1 for choice in scene3.resolved.values() if choice == "yes")
     check(
         "シーン3: priyaに委任した4人+priya自身で、yesの重みが5に集約される",
@@ -187,6 +191,16 @@ def main() -> None:
             for t in scene3_env.read_traces()
             if t.agent_id in {"q1", "q2", "q3", "q4"}
         ),
+    )
+
+    # --- 情報の非対称性の制御(#3、D-59) -------------------------------------------
+    leak_agents_all = leak_scene1_agents + leak_scene2_agents + leak_scene3_agents
+    check(
+        f"シーン1〜3(#3、情報の非対称性の制御): 全{total_checks(leak_agents_all)}回の"
+        "意思決定タイミングで、同一ラウンド内の他者の委任先・投票先が一度も見えていない"
+        "(委任連鎖の解決(resolve_delegations)も申告収集後にのみ行われる設計のため、"
+        "後手のエージェントが先手の委任先を覗いて追随する優先権の非対称は構造的に発生しない)",
+        no_intra_round_leak(leak_agents_all),
     )
 
     # --- 検証キット: モンテカルロ(構造的頑健性、循環を含むランダムな委任グラフ) -------

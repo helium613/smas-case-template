@@ -21,9 +21,10 @@ from schemas.agent_schema import ObservationInput
 from schemas.environment_schema import EnvironmentConfig, Trace
 from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
+from verification_kit.information_asymmetry import LeakDetectingAgent, no_intra_round_leak, total_checks
 
 from credit_agents import CreditAwareHonestAgent, CreditLimitMaximizingAgent, OptimizingCreditAwareAgent
-from deviation_test import run_four_scene_demo, run_sustained_strategy_comparison
+from deviation_test import run_four_scene_demo, run_round, run_sustained_strategy_comparison
 from incentive_engine import TriggerStrategyEngine, TriggerStrategyParameters, compute_credit_limit
 from payloads import CreditRoundRecord
 
@@ -184,6 +185,25 @@ def main() -> None:
     print(
         f"       (carol 割引後合計効用: 逸脱={comparison.actual_utility:+.2f} / "
         f"遵守を貫いた場合(反実仮想)={comparison.counterfactual_utility:+.2f})"
+    )
+
+    # --- 情報の非対称性の制御(#3、D-59) -------------------------------------------
+    # run_four_scene_demoはagent_idsからエージェントを内部生成するため、単独のrun_round
+    # 呼び出しで同じパターン(信用枠は事前算出、申告収集後にのみ書き込み)を直接検証する。
+    leak_env = EnvironmentClient(env_config)
+    leak_agents = [
+        LeakDetectingAgent(CreditAwareHonestAgent(a, i, n_agents=len(agent_ids)), leak_env)
+        for i, a in enumerate(agent_ids)
+    ]
+    for _ in range(5):
+        run_round(f"leak_check_{leak_env.current_round + 1}", leak_agents, demo_engine, leak_env)
+    check(
+        f"信用枠配分(#3、情報の非対称性の制御): 全{total_checks(leak_agents)}回の意思決定"
+        "タイミングで、同一ラウンド内の他者の痕跡が一度も見えていない"
+        "(信用枠はラウンド開始時点で全員分を先に算出し、申告収集後にまとめて書き込む"
+        "設計のため、後手のエージェントが先手の申告や信用枠の変化を覗き見る優先権の"
+        "非対称は構造的に発生しない)",
+        no_intra_round_leak(leak_agents),
     )
 
     # --- D-37/D-38: 信用枠内に留まる恒常的な過大申告(素朴な逸脱とは異なる、検出されない戦略) ---

@@ -34,6 +34,7 @@ from schemas.incentive_schema import Declaration
 from deviation_test import run_three_scene_demo
 from verification import run_structural_verification
 from verification_kit.gambit_collusion import check_pure_nash_collusion
+from verification_kit.information_asymmetry import LeakDetectingAgent, no_intra_round_leak, total_checks
 from verification_kit.montecarlo import run_trials, summarize
 
 
@@ -196,12 +197,13 @@ def main() -> None:
         FluctuatingHonestAgent(agent_id, index, n_agents=len(agent_ids))
         for index, agent_id in enumerate(agent_ids)
     ]
+    leak_agents = [LeakDetectingAgent(a, scene_env) for a in honest_agents]
 
     def make_greedy_deviant(agent):
         return GreedyOverstatingAgent(agent.agent_id, fixed_declared_value=1000.0)
 
     scenes, report = run_three_scene_demo(
-        honest_agents,
+        leak_agents,
         deviating_agent_id="carol",
         deviating_agent_factory=make_greedy_deviant,
         engine=engine,
@@ -235,6 +237,15 @@ def main() -> None:
         "シーン1(#10、Envy-freeness): 正直申告のもとでは、いかなる敗者も勝者の結果を羨まない"
         "(敗者の真の価値は定義上、勝者の支払い額=2番目に高い申告額を超えないため)",
         envy_violations == 0,
+    )
+
+    # --- 情報の非対称性の制御(#3、D-59) -------------------------------------------
+    check(
+        f"3シーン構成(#3、情報の非対称性の制御): 全{total_checks(leak_agents)}回の意思決定"
+        "タイミングで、同一ラウンド内の他者の痕跡が一度も見えていない"
+        "(申告収集は全員分をまとめてから書き込む設計のため、後手のエージェントが"
+        "先手の申告を覗き見る優先権の非対称は構造的に発生しない)",
+        no_intra_round_leak(leak_agents),
     )
 
     scene2_results = [s for s in scenes if s.name == "scene2_deviation_injected"]

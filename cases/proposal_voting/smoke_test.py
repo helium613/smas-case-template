@@ -28,6 +28,7 @@ from voting_agents import BuryingStrategicAgent, HonestVotingAgent
 from deviation_test import run_two_scene_demo
 from verification import run_structural_verification
 from verification_kit.gambit_collusion import check_pure_nash_collusion
+from verification_kit.information_asymmetry import LeakDetectingAgent, no_intra_round_leak, total_checks
 
 
 def check(label: str, condition: bool) -> None:
@@ -223,6 +224,31 @@ def main() -> None:
     print(
         f"       (bob 合計効用: 埋葬戦術={manipulation_report.total_actual_utility:+.1f} / "
         f"正直(反実仮想)={manipulation_report.total_counterfactual_utility:+.1f})"
+    )
+
+    # --- 情報の非対称性の制御(#3、D-59) -------------------------------------------
+    # run_two_scene_demoのシーン2はhonest_agentsを反実仮想の"計測専用"呼び出しにも
+    # 再利用しており、その呼び出しは(CLAUDE.md 9章の設計どおり)メカニズムの構成要素
+    # ではないため実際の結果に影響しない一方、直後にrun_voting_round側の書き込みを
+    # 観測できてしまい、本チェックの対象(実際の意思決定)としては趣旨がずれる。
+    # そのため、実際の結果に影響する経路(run_voting_round)だけを対象に、独立した
+    # ラウンドで直接検証する。
+    leak_probe_env = EnvironmentClient(env_config)
+    leak_probe_agents = [
+        LeakDetectingAgent(
+            HonestVotingAgent(a.agent_id, {c: float(len(candidate_ids) - i) for i, c in enumerate(candidate_ids)}),
+            leak_probe_env,
+        )
+        for a in honest_scene_agents
+    ]
+    for i in range(5):
+        run_voting_round(f"leak_check_{i + 1}", leak_probe_agents, engine, leak_probe_env)
+    check(
+        f"投票(LangGraph、#3、情報の非対称性の制御): 全{total_checks(leak_probe_agents)}回の"
+        "意思決定タイミングで、同一ラウンド内の他者の痕跡が一度も見えていない"
+        "(LangGraphのノード実行でも申告収集は全員分をまとめてから書き込む設計のため、"
+        "グラフのノード順序が優先権の非対称を持ち込まないことを実行時に確認、CLAUDE.md 7章)",
+        no_intra_round_leak(leak_probe_agents),
     )
 
     # --- 検証キット: モンテカルロ(③頑健性、ここでは"検出できるか"の確認) -----------
