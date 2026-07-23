@@ -1,0 +1,365 @@
+<title>trust連鎖の合成 — IAM委任チェーンの権限昇格</title>
+<style>
+  :root {
+    --bg: #f3f1ec;
+    --panel: #ffffff;
+    --panel-2: #ece9e2;
+    --border: #d8d3c8;
+    --text: #23211d;
+    --text-muted: #6b6558;
+    --text-faint: #a29c8c;
+    --accent-safe: #1f8a68;
+    --accent-safe-bg: #dcf1e9;
+    --accent-danger: #b2502a;
+    --accent-danger-bg: #f6e4da;
+    --accent-new: #a6472e;
+    --accent-active: #b8860f;
+    --accent-active-bg: #f7ecd0;
+    --edge: #b7b0a1;
+    --edge-active: #b8860f;
+    --edge-new: #a6472e;
+    --shadow: 0 1px 2px rgba(35,33,29,0.06), 0 8px 24px rgba(35,33,29,0.06);
+    --font-display: -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", "Consolas", "Menlo", monospace;
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161b;
+    --panel: #1b1e25;
+    --panel-2: #21242c;
+    --border: #2e323c;
+    --text: #e9e6de;
+    --text-muted: #97917f;
+    --text-faint: #6b6658;
+    --accent-safe: #4bd3a4;
+    --accent-safe-bg: #16332a;
+    --accent-danger: #ec8c62;
+    --accent-danger-bg: #3a2419;
+    --accent-new: #ff8f6b;
+    --accent-active: #e8bc4e;
+    --accent-active-bg: #382d13;
+    --edge: #3d414c;
+    --edge-active: #e8bc4e;
+    --edge-new: #ff8f6b;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161b;
+      --panel: #1b1e25;
+      --panel-2: #21242c;
+      --border: #2e323c;
+      --text: #e9e6de;
+      --text-muted: #97917f;
+      --text-faint: #6b6658;
+      --accent-safe: #4bd3a4;
+      --accent-safe-bg: #16332a;
+      --accent-danger: #ec8c62;
+      --accent-danger-bg: #3a2419;
+      --accent-new: #ff8f6b;
+      --accent-active: #e8bc4e;
+      --accent-active-bg: #382d13;
+      --edge: #3d414c;
+      --edge-active: #e8bc4e;
+      --edge-new: #ff8f6b;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-display); padding: 28px; min-height: 100vh; }
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+  header { display: flex; flex-direction: column; gap: 6px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); }
+  h1 { font-size: 24px; font-weight: 650; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  .sub { color: var(--text-muted); font-size: 14px; max-width: 66ch; line-height: 1.55; margin: 2px 0 0; }
+  .sub code { font-family: var(--font-mono); font-size: 12.5px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+
+  .stage { padding: 6px 6px 0; }
+  .stage svg { width: 100%; height: auto; display: block; }
+
+  .node circle { fill: var(--panel-2); stroke: var(--edge); stroke-width: 1.6; transition: fill 420ms ease, stroke 420ms ease, filter 420ms ease; }
+  .node.state-idle circle { fill: var(--panel-2); stroke: var(--edge); }
+  .node.state-active circle { fill: var(--accent-active-bg); stroke: var(--accent-active); stroke-width: 2.4; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent-active) 55%, transparent)); }
+  .node.state-safe circle { fill: var(--accent-safe-bg); stroke: var(--accent-safe); stroke-width: 2.2; }
+  .node.state-danger circle { fill: var(--accent-danger-bg); stroke: var(--accent-danger); stroke-width: 2.6; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent-danger) 55%, transparent)); }
+
+  .node text.label { font-family: var(--font-mono); font-size: 13px; font-weight: 600; fill: var(--text); }
+  .node text.role { font-family: var(--font-mono); font-size: 9.5px; fill: var(--text-faint); letter-spacing: 0.02em; }
+  .node text.tag { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em; }
+  .node.state-safe text.tag { fill: var(--accent-safe); }
+  .node.state-danger text.tag { fill: var(--accent-danger); }
+  .node.state-active text.tag { fill: var(--accent-active); }
+  .node.state-idle text.tag { fill: var(--text-faint); }
+
+  .edge path { fill: none; stroke: var(--edge); stroke-width: 1.6; transition: stroke 380ms ease, stroke-width 380ms ease, filter 380ms ease; marker-end: url(#arrow); }
+  .edge.active path { stroke: var(--edge-active); stroke-width: 2.6; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--edge-active) 60%, transparent)); marker-end: url(#arrow-active); }
+  .edge.new path { stroke: var(--edge-new); stroke-width: 2.4; stroke-dasharray: 5 3; marker-end: url(#arrow-new); }
+  .edge.hidden path { opacity: 0; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px 20px; padding: 14px 18px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); }
+  .legend-item { display: flex; align-items: center; gap: 7px; }
+  .swatch { width: 11px; height: 11px; border-radius: 50%; border: 1.6px solid; flex: none; }
+  .swatch.safe { background: var(--accent-safe-bg); border-color: var(--accent-safe); }
+  .swatch.danger { background: var(--accent-danger-bg); border-color: var(--accent-danger); }
+  .swatch.active { background: var(--accent-active-bg); border-color: var(--accent-active); }
+  .swatch.idle { background: var(--panel-2); border-color: var(--edge); }
+  .swatch.new { background: var(--panel-2); border-color: var(--edge-new); border-style: dashed; }
+
+  .side { display: flex; flex-direction: column; gap: 14px; }
+
+  .controls { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  button {
+    font-family: var(--font-display); font-size: 13px; font-weight: 600; border-radius: 7px; padding: 7px 13px;
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer;
+    transition: background 150ms ease, border-color 150ms ease, transform 80ms ease;
+  }
+  button:hover { border-color: var(--accent-active); }
+  button:active { transform: translateY(1px); }
+  button:focus-visible { outline: 2px solid var(--accent-active); outline-offset: 2px; }
+  button.primary { background: var(--accent-active); border-color: var(--accent-active); color: #22190a; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .step-count { margin-left: auto; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+  .log { padding: 14px 16px; display: flex; flex-direction: column; gap: 9px; max-height: 340px; overflow-y: auto; }
+  .log-entry { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--text-muted); padding-left: 14px; border-left: 2px solid var(--border); opacity: 0; transform: translateY(3px); animation: entry-in 320ms ease forwards; }
+  .log-entry.current { color: var(--text); border-left-color: var(--accent-active); }
+  .log-entry b { color: var(--text); font-weight: 700; }
+  .log-entry .safe { color: var(--accent-safe); font-weight: 700; }
+  .log-entry .danger { color: var(--accent-danger); font-weight: 700; }
+  @keyframes entry-in { to { opacity: 1; transform: translateY(0); } }
+
+  .verdict-box { padding: 14px 16px; border-top: 1px solid var(--border); }
+  .verdict-box h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin: 0 0 10px; font-weight: 650; }
+  .verdict { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-muted); padding: 9px 11px; border-radius: 7px; background: var(--panel-2); border: 1px solid var(--border); line-height: 1.55; }
+  .verdict b { color: var(--text); }
+  .verdict.show-danger { border-color: var(--accent-danger); }
+
+  .source { padding: 12px 16px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); line-height: 1.6; }
+  .source code { color: var(--text-muted); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .node circle, .edge path { transition-duration: 1ms !important; }
+    .log-entry { animation-duration: 1ms !important; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">SMAS — cases/privilege_delegation — 可視化プロトタイプ</span>
+    <h1>1件のtrust宣言が、既存の経路とどう合成されるか</h1>
+    <p class="sub">
+      <code>incentive_engine.resolve_reachable_tiers()</code> が実際に計算した到達可能性を、
+      build_svcを起点にステップごとに再生する。誰も虚偽申告していないのに、adminの
+      1件のtrust宣言が既存の正直な宣言と合成され、権限昇格が成立する様子を辿る(D-60)。
+    </p>
+  </header>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="stage">
+        <svg viewBox="0 0 720 460" xmlns="http://www.w3.org/2000/svg" aria-label="trustグラフ">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"></path>
+            </marker>
+            <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--edge-active)"></path>
+            </marker>
+            <marker id="arrow-new" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--edge-new)"></path>
+            </marker>
+          </defs>
+
+          <g class="edges">
+            <g class="edge" data-edge="build_svc-ci_svc"><path d="M185,335 L345,265"></path></g>
+            <g class="edge" data-edge="ci_svc-deploy_svc"><path d="M415,240 L545,150"></path></g>
+            <g class="edge hidden" data-edge="ci_svc-admin"><path d="M415,265 L545,345"></path></g>
+          </g>
+
+          <g class="nodes">
+            <g class="node state-idle" data-node="intern_svc" transform="translate(120,130)">
+              <circle r="30"></circle>
+              <text class="label" y="-4" text-anchor="middle">intern_svc</text>
+              <text class="role" y="10" text-anchor="middle">tier0(孤立)</text>
+              <text class="tag" y="46" text-anchor="middle">—</text>
+            </g>
+            <g class="node state-idle" data-node="build_svc" transform="translate(150,340)">
+              <circle r="32"></circle>
+              <text class="label" y="-4" text-anchor="middle">build_svc</text>
+              <text class="role" y="10" text-anchor="middle">起点(tier1)</text>
+              <text class="tag" y="48" text-anchor="middle">—</text>
+            </g>
+            <g class="node state-idle" data-node="ci_svc" transform="translate(380,255)">
+              <circle r="32"></circle>
+              <text class="label" y="-4" text-anchor="middle">ci_svc</text>
+              <text class="role" y="10" text-anchor="middle">tier1</text>
+              <text class="tag" y="48" text-anchor="middle">—</text>
+            </g>
+            <g class="node state-idle" data-node="deploy_svc" transform="translate(580,130)">
+              <circle r="30"></circle>
+              <text class="label" y="-4" text-anchor="middle">deploy_svc</text>
+              <text class="role" y="10" text-anchor="middle">tier2</text>
+              <text class="tag" y="46" text-anchor="middle">—</text>
+            </g>
+            <g class="node state-idle" data-node="admin" transform="translate(580,360)">
+              <circle r="32"></circle>
+              <text class="label" y="-4" text-anchor="middle">admin</text>
+              <text class="role" y="10" text-anchor="middle">tier3</text>
+              <text class="tag" y="48" text-anchor="middle">—</text>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="swatch idle"></span>未探索</span>
+        <span class="legend-item"><span class="swatch active"></span>探索中(辿っている辺)</span>
+        <span class="legend-item"><span class="swatch safe"></span>意図された上限内</span>
+        <span class="legend-item"><span class="swatch danger"></span>権限昇格(上限超過)</span>
+        <span class="legend-item"><span class="swatch new"></span>シーン2で追加された宣言</span>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="panel">
+        <div class="controls">
+          <button id="btn-reset">最初から</button>
+          <button id="btn-prev">戻る</button>
+          <button id="btn-next" class="primary">次へ ▸</button>
+          <span class="step-count" id="step-count">0 / 0</span>
+        </div>
+        <div class="log" id="log"></div>
+        <div class="verdict-box">
+          <h2>build_svcの到達可能tier</h2>
+          <div class="verdict" id="verdict">ステップを進めると表示されます。</div>
+        </div>
+        <div class="source">
+          入力: <code>ci_svc.delegate_to="build_svc", deploy_svc.delegate_to="ci_svc"</code>
+          (シーン1)+ <code>admin.delegate_to="ci_svc"</code>(シーン2で追加)<br>
+          出典: cases/privilege_delegation/smoke_test.py・generate_results_summary.py と同じ設定
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // incentive_engine.PrivilegeDelegationEngine.resolve_reachable_tiers()が実際に返す
+  // 結果(smoke_test.py・generate_results_summary.pyと同じ設定)を、build_svcを起点に
+  // 手動でステップ分解して再生する。
+  var steps = [
+    { log: "シーン1(平常時)のtrust関係のみが存在する。build_svcを起点に到達可能性を探索する。", nodes: {}, edges: [], hiddenEdges: ["ci_svc-admin"] },
+
+    { log: "<b>build_svc</b>はci_svcをassumeできる(ci_svc.delegate_to=\"build_svc\")→辺を辿る。", nodes: { build_svc: "active", ci_svc: "active" }, edges: ["build_svc-ci_svc"], hiddenEdges: ["ci_svc-admin"] },
+    { log: "<b>ci_svc</b>はdeploy_svcをassumeできる(deploy_svc.delegate_to=\"ci_svc\")→さらに辿る。", nodes: { build_svc: "active", ci_svc: "active", deploy_svc: "active" }, edges: ["build_svc-ci_svc", "ci_svc-deploy_svc"], hiddenEdges: ["ci_svc-admin"] },
+    { log: "これ以上辿れる相手がいない。到達可能な最大tierはdeploy_svcの<b>tier2</b>——意図された上限(intended_max_tier=2)と<span class=\"safe\">一致</span>、問題なし。", nodes: { build_svc: "safe", ci_svc: "safe", deploy_svc: "safe" }, edges: [], hiddenEdges: ["ci_svc-admin"], tier: 2, verdict: "到達可能tier = <b>2</b>(意図された上限どおり)" },
+
+    { log: "シーン2: <b>admin</b>が新たにci_svcを信頼する(admin.delegate_to=\"ci_svc\", 「CIから緊急時にadminへ」)。単独では局所的に正当な判断。<span class=\"new-note\">新しい辺(ci_svc→admin)が出現。</span>", nodes: { build_svc: "idle", ci_svc: "idle", deploy_svc: "idle" }, edges: [], hiddenEdges: [], newEdges: ["ci_svc-admin"], tier: 2, verdict: "到達可能tier = <b>2</b>(まだ再探索前)" },
+
+    { log: "build_svcから到達可能性を<b>再探索</b>する。build_svc→ci_svcは変わらない。", nodes: { build_svc: "active", ci_svc: "active" }, edges: ["build_svc-ci_svc"], newEdges: ["ci_svc-admin"], tier: 2, verdict: "到達可能tier = <b>2</b>(探索中)" },
+    { log: "ci_svcは今度はdeploy_svcだけでなく<b>admin</b>にもassumeできる(admin.delegate_to=\"ci_svc\")→この辺も辿る。", nodes: { build_svc: "active", ci_svc: "active", deploy_svc: "active", admin: "active" }, edges: ["build_svc-ci_svc", "ci_svc-deploy_svc", "ci_svc-admin"], tier: 3, verdict: "到達可能tier = <b>3</b>(admin相当、探索中)" },
+    { log: "到達可能な最大tierが<b>3</b>(admin相当)に上昇——意図された上限(2)を<span class=\"danger\">超過</span>。<b>権限昇格が成立</b>。誰も虚偽申告していないのに、2つの独立した正直なtrust宣言(build_svc→ci_svc、ci_svc→admin)がci_svcという1つの中継点を介して合成され、この経路が生まれた(confused deputy)。", nodes: { build_svc: "danger", ci_svc: "danger", deploy_svc: "safe", admin: "danger" }, edges: ["build_svc-ci_svc", "ci_svc-deploy_svc", "ci_svc-admin"], tier: 3, verdict: "到達可能tier = <b>3</b>(意図された上限2を<span class=\"danger\">超過</span>、権限昇格)", final: true }
+  ];
+
+  var nodeIds = ["intern_svc", "build_svc", "ci_svc", "deploy_svc", "admin"];
+  var edgeIds = ["build_svc-ci_svc", "ci_svc-deploy_svc", "ci_svc-admin"];
+  var current = 0;
+
+  var logEl = document.getElementById("log");
+  var stepCountEl = document.getElementById("step-count");
+  var verdictEl = document.getElementById("verdict");
+
+  function nodeEl(id) { return document.querySelector('.node[data-node="' + id + '"]'); }
+  function edgeEl(id) { return document.querySelector('.edge[data-edge="' + id + '"]'); }
+
+  function render() {
+    // reset
+    nodeIds.forEach(function (id) {
+      var el = nodeEl(id);
+      el.setAttribute("class", "node state-idle");
+      el.querySelector(".tag").textContent = "—";
+    });
+    edgeIds.forEach(function (id) {
+      var el = edgeEl(id);
+      el.setAttribute("class", "edge hidden");
+    });
+
+    // replay cumulative node/edge states up to `current`
+    var resolved = {};
+    var visibleEdges = {};
+    var newEdges = {};
+    for (var s = 0; s <= current; s++) {
+      var st = steps[s];
+      for (var k in st.nodes) resolved[k] = st.nodes[k];
+      if (st.hiddenEdges) {
+        // hiddenEdgesが明示されたステップでは、それ以外の既知の辺は可視のまま維持する
+      }
+      if (st.newEdges) { st.newEdges.forEach(function (eid) { newEdges[eid] = true; }); }
+    }
+    // build_svc-ci_svc・ci_svc-deploy_svcはstep0から可視、ci_svc-adminはnewEdgesに入って初めて可視
+    visibleEdges["build_svc-ci_svc"] = true;
+    visibleEdges["ci_svc-deploy_svc"] = true;
+    if (newEdges["ci_svc-admin"]) { visibleEdges["ci_svc-admin"] = true; }
+
+    nodeIds.forEach(function (id) {
+      if (resolved[id]) {
+        var el = nodeEl(id);
+        el.setAttribute("class", "node state-" + resolved[id]);
+        var tagText = resolved[id] === "safe" ? "SAFE" : resolved[id] === "danger" ? "昇格" : resolved[id] === "active" ? "探索中" : "—";
+        el.querySelector(".tag").textContent = tagText;
+      }
+    });
+
+    edgeIds.forEach(function (id) {
+      if (visibleEdges[id]) {
+        var el = edgeEl(id);
+        el.setAttribute("class", newEdges[id] ? "edge new" : "edge");
+      }
+    });
+    var activeEdges = steps[current].edges || [];
+    activeEdges.forEach(function (id) {
+      var el = edgeEl(id);
+      if (el) el.setAttribute("class", "edge active");
+    });
+
+    // log
+    logEl.innerHTML = "";
+    for (var i = 0; i <= current; i++) {
+      var div = document.createElement("div");
+      div.className = "log-entry" + (i === current ? " current" : "");
+      div.innerHTML = steps[i].log;
+      logEl.appendChild(div);
+    }
+    logEl.scrollTop = logEl.scrollHeight;
+
+    stepCountEl.textContent = current + " / " + (steps.length - 1);
+
+    var st = steps[current];
+    verdictEl.innerHTML = st.verdict || "ステップを進めると表示されます。";
+    verdictEl.className = "verdict" + (st.final ? " show-danger" : "");
+
+    document.getElementById("btn-prev").disabled = current === 0;
+    document.getElementById("btn-next").disabled = current === steps.length - 1;
+  }
+
+  document.getElementById("btn-next").addEventListener("click", function () {
+    if (current < steps.length - 1) { current++; render(); }
+  });
+  document.getElementById("btn-prev").addEventListener("click", function () {
+    if (current > 0) { current--; render(); }
+  });
+  document.getElementById("btn-reset").addEventListener("click", function () {
+    current = 0; render();
+  });
+
+  render();
+})();
+</script>
