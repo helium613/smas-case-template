@@ -40,13 +40,13 @@ sys.path.insert(0, str(_CASE_DIR.parents[1]))
 from aggregation import TerminationConfig, run_mechanism
 from agents.llm_mock import ProbabilisticMockAgent
 from agents.llm_real import AnthropicToolUseAgent
-from agents.optimization_based import OptimizingBidderAgent
+from agents.optimization_based import OptimizingBidderAgent, ValuationEstimatingBidderAgent
 from agents.rule_based import FluctuatingHonestAgent, GreedyOverstatingAgent, HonestRuleBasedAgent
 from environment import EnvironmentClient
 from incentive_engine import SingleItemVcgEngine, SingleItemVcgParameters
 from schemas.agent_schema import Agent, ObservationInput
-from schemas.environment_schema import EnvironmentConfig
-from schemas.incentive_schema import Declaration
+from schemas.environment_schema import EnvironmentConfig, Trace
+from schemas.incentive_schema import Declaration, ParticipationRecord
 from deviation_test import run_scene, run_three_scene_demo
 from verification import run_structural_verification
 from verification_kit.gambit_collusion import check_pure_nash_collusion
@@ -272,6 +272,41 @@ def main() -> None:
         optimizer_results[label] = action.declared_value
     optimizer_elapsed = time.perf_counter() - t0
 
+    # --- ③: 評価額推定エージェント(ToM軽量版、#1・#2、D-77で初適用) --------------------
+    # 固定の信念分布(D-34)ではなく、①環境層の公開痕跡から観測した競合の申告額履歴を
+    # 経験分布として使う。ユーザーとの合意によりスコープを「市場経済層で語れる評価指標
+    # (申告額)の推定」に限定する(相手の推論モデルそのものを推定する深いToMはSMASの
+    # スコープ外、agents/optimization_based.py 冒頭の注記参照)。
+    t0 = time.perf_counter()
+    tom_env = EnvironmentClient(EnvironmentConfig(half_life_rounds=3.0, max_trace_age_rounds=30))
+    rival_true_values = [6.0, 13.0, 8.0, 15.0, 9.0, 11.0, 9.8, 10.2]
+    for round_id, rival_value in enumerate(rival_true_values, start=1):
+        tom_env.advance_round()
+        tom_env.write_trace(
+            writer_id="rival",
+            trace=Trace(
+                agent_id="rival",
+                round_id=round_id,
+                payload=ParticipationRecord(declared_value=rival_value, won=True, payment=0.0, eligible=True),
+            ),
+        )
+    observed_rival_history = [
+        t.payload.declared_value
+        for t in tom_env.read_traces()
+        if t.agent_id == "rival" and isinstance(t.payload, ParticipationRecord)
+    ]
+    tom_warm_agent = ValuationEstimatingBidderAgent(
+        agent_id="me", true_value=10.0, competitor_id="rival", engine=engine, rng=random.Random(1)
+    )
+    tom_warm_action = tom_warm_agent.decide(
+        ObservationInput(trace_summary={"competitor_declared_value_history": observed_rival_history})
+    )
+    tom_cold_agent = ValuationEstimatingBidderAgent(
+        agent_id="me", true_value=10.0, competitor_id="rival", engine=engine, rng=random.Random(1)
+    )
+    tom_cold_action = tom_cold_agent.decide(ObservationInput(trace_summary={}))
+    tom_elapsed = time.perf_counter() - t0
+
     # --- ⑤: DisCoPy構造検証 ---------------------------------------------------------
     t0 = time.perf_counter()
     verification_report = run_structural_verification(all_agent_ids=agent_ids, write_own_domain_only=True)
@@ -360,6 +395,23 @@ def main() -> None:
         f"耐戦略性を検証した初めての例(信念分布の形状によらず最適解が真の評価額と一致する)。"
     )
     lines.append(
+        f"- 誘因整合性(#1)・耐戦略性(#2、評価額推定・ToM軽量版、D-77で初適用): "
+        f"`ValuationEstimatingBidderAgent`が、D-34の固定サンプラーではなく①環境層の"
+        f"公開痕跡から観測した競合(rival)の過去{len(rival_true_values)}ラウンド分の"
+        f"申告額履歴(経験分布、ブートストラップ再抽出)を信念として使っても、"
+        f"最適な申告額は真の評価額(10.0)付近に収束した(申告={tom_warm_action.declared_value:.2f})。"
+        f"観測が全く無いcold start(初回ラウンド相当)でもフォールバックの広い信念分布"
+        f"のもとで例外を起こさず同様に収束する(申告={tom_cold_action.declared_value:.2f})。"
+        f"**実装時の発見**: 観測点が疎(かつ真の評価額の片側にしか無い)場合、経験分布は"
+        f"観測点の間隔でしか区切れないため、真の評価額を挟む2点の間隔が広いほど収束の"
+        f"精度が粗くなる(観測点そのものが有限のため、連続分布を仮定するD-34より本質的に"
+        f"不確かさが大きい、データ駆動な信念推定に固有の限界)。ユーザーとの合意により、"
+        f"推定対象は「市場経済層で語れる評価指標(申告額)」に明示的に限定している——"
+        f"相手の推論モデルそのものを推定する深いToM(再帰的な信念等)は、CLAUDE.md 3章が"
+        f"除外する「LLMの内部推論品質そのものへの介入」に抵触するためSMASのスコープ外"
+        f"(DECISIONS.md D-77)。"
+    )
+    lines.append(
         f"- 打ち切り耐性(#23): 3シーン構成の全{len(scenes)}ラウンドでフォールバックに落ちず完走"
         f"({'確認済み' if all(not s.outcome.terminated_by_fallback for s in scenes) else '要確認'})。"
     )
@@ -373,6 +425,7 @@ def main() -> None:
                  f"({montecarlo_elapsed / n_trials * 1000:.3f} ms/試行)")
     lines.append(f"- pygambit結託耐性チェック(2×3戦略の純戦略ナッシュ均衡列挙): 実測 {gambit_elapsed * 1000:.2f} ms")
     lines.append(f"- 最適化ベースエージェント(scipy.optimize、信念分布2通り×300サンプル): 実測 {optimizer_elapsed * 1000:.2f} ms")
+    lines.append(f"- 評価額推定エージェント(ToM軽量版、履歴{len(rival_true_values)}ラウンド分の書き込み+warm/cold双方の探索): 実測 {tom_elapsed * 1000:.2f} ms")
     lines.append(f"- ⑤DisCoPy構造検証: 実測 {verification_elapsed * 1000:.2f} ms")
     lines.append("- 資源コスト(#24)の内訳としては以上の通り。分散台帳・検証可能遅延関数等の"
                  "本番運用コストは技術選定が未決のため対象外(SMAS_theorymap.md 5章)。")

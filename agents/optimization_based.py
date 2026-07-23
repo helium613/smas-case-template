@@ -12,6 +12,14 @@
 組合せ的な申告空間へはそのまま拡張できず、離散最適化へ設計を変える必要がある
 (プラガブル性は型の互換性のみを意味し、振る舞いの同等性は保証しない、CLAUDE.md
 2章 原則4)。
+
+【評価額推定(ToM軽量版)についての注記、D-77】`ValuationEstimatingBidderAgent`は、
+OptimizingBidderAgentの`competitor_bid_sampler`(固定の信念分布)を、観測データ
+(競合の過去の申告額履歴)から推定した経験分布に置き換えたもの。ユーザーとの合意により、
+推定対象は「市場経済層で語れる評価指標(申告額)」に明示的に限定する——相手の推論
+モデルそのもの(再帰的な信念、相手が自分をどう見ているか等)を推定する深いToMは、
+CLAUDE.md 3章が除外する「LLMの内部推論品質そのものへの介入」に抵触するため、
+SMASのスコープ外(このプロジェクトでは扱わない、必要になれば別プロジェクトとする)。
 """
 from __future__ import annotations
 
@@ -82,3 +90,66 @@ class OptimizingBidderAgent:
             method="bounded",
         )
         return ActionOutput(action="bid", declared_value=result.x, reasoning=None)
+
+
+class ValuationEstimatingBidderAgent:
+    """評価額推定(ToM軽量版、D-77)。競合の申告額に関する信念分布を、固定サンプラー
+    (OptimizingBidderAgent、D-34)ではなく、observation.trace_summaryに載った
+    「競合の過去の申告額履歴」から実データ駆動で推定する。
+
+    呼び出し側が①環境層の公開痕跡(過去ラウンドのみ、情報の非対称性の制御・#3・D-59の
+    対象範囲内)から履歴を抽出し、`observation.trace_summary[history_key]`に
+    `list[float]`として載せる(credit_agents.CreditAwareHonestAgentがcredit_limitを
+    observationから受け取るのと同じidiom)。このクラス自身はペイロードの型を一切
+    知らない——ケースごとに異なる①環境層のpayload schema(ParticipationRecord等)には
+    依存しない。
+
+    VCG(セカンドプライス)は正直申告が支配戦略のため、競合が過去(概ね)honestに
+    振る舞っていたなら、観測された申告額履歴はそのまま競合の真の評価額分布の経験的
+    サンプルとして扱える。観測数がmin_observations未満の場合(cold start)は
+    fallback_samplerを使う。最適解の探索自体はOptimizingBidderAgentにそのまま
+    委譲する(信念の推定手段が変わっても、探索ロジックを再実装しない)。
+    """
+
+    def __init__(
+        self,
+        agent_id: str,
+        true_value: float,
+        competitor_id: str,
+        engine: ScalarBidEngine,
+        history_key: str = "competitor_declared_value_history",
+        min_observations: int = 3,
+        fallback_sampler: Callable[[random_module.Random], float] | None = None,
+        n_samples: int = 300,
+        search_bound_multiplier: float = 3.0,
+        rng: random_module.Random | None = None,
+    ) -> None:
+        self.agent_id = agent_id
+        self.true_value = true_value
+        self.competitor_id = competitor_id
+        self.engine = engine
+        self.history_key = history_key
+        self.min_observations = min_observations
+        self.fallback_sampler = fallback_sampler or (lambda rng: rng.uniform(0.0, true_value * 2.0))
+        self.n_samples = n_samples
+        self.search_bound_multiplier = search_bound_multiplier
+        self.rng = rng or random_module.Random(0)
+
+    def decide(self, observation: ObservationInput) -> ActionOutput:
+        observed: list[float] = observation.trace_summary.get(self.history_key) or []
+        if len(observed) >= self.min_observations:
+            pool = list(observed)
+            sampler: Callable[[random_module.Random], float] = lambda rng: rng.choice(pool)
+        else:
+            sampler = self.fallback_sampler
+        delegate = OptimizingBidderAgent(
+            agent_id=self.agent_id,
+            true_value=self.true_value,
+            competitor_id=self.competitor_id,
+            competitor_bid_sampler=sampler,
+            engine=self.engine,
+            n_samples=self.n_samples,
+            search_bound_multiplier=self.search_bound_multiplier,
+            rng=self.rng,
+        )
+        return delegate.decide(observation)
