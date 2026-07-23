@@ -354,12 +354,12 @@
     // reset
     nodeIds.forEach(function (id) {
       var el = nodeEl(id);
-      el.className = "node state-idle";
+      el.setAttribute("class", "node state-idle");
       el.querySelector(".tag").textContent = "—";
     });
     edgeIds.forEach(function (id) {
       var el = edgeEl(id);
-      el.className = "edge";
+      el.setAttribute("class", "edge");
     });
 
     // replay cumulative node states up to `current`
@@ -377,7 +377,7 @@
     nodeIds.forEach(function (id) {
       if (resolved[id]) {
         var el = nodeEl(id);
-        el.className = "node state-" + resolved[id];
+        el.setAttribute("class", "node state-" + resolved[id]);
         var tagText = resolved[id] === "yes" ? "YES" : resolved[id] === "no" ? "NO" : resolved[id] === "active" ? "解決中" : resolved[id] === "void" ? "無効" : "—";
         el.querySelector(".tag").textContent = tagText;
       }
