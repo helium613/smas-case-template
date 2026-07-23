@@ -70,7 +70,7 @@
       <a class="card" href="cross_case.html">
         <span class="card-title">ケース横断ダッシュボード</span>
         <span class="card-path">visualize/cross_case.html</span>
-        <span class="card-desc">5大指標×4ケースの一覧、実行主体層別ダッシュボード、評価観点25項目、レポート全文ビューア(4タブ構成)。</span>
+        <span class="card-desc">5大指標×5ケースの一覧、実行主体層別ダッシュボード、評価観点25項目、レポート全文ビューア(4タブ構成)。</span>
       </a>
       <a class="card" href="incentive_gradient.html">
         <span class="card-title">インセンティブ勾配(制度の穴マップ)</span>
@@ -127,22 +127,11 @@
   <section class="group">
     <div class="group-title">ケース5 — IAM委任チェーンの権限昇格</div>
     <div class="cards">
-      <a class="card" href="../cases/privilege_delegation/visualize/scenario_timeline.html">
-        <span class="card-title">シーンの推移</span>
-        <span class="card-path">cases/privilege_delegation/visualize/scenario_timeline.html</span>
-        <span class="card-desc">build_svcの到達可能tierと、昇格したエージェント数(実際 vs 反実仮想)のラウンドごとの推移。</span>
-      </a>
-      <a class="card" href="../cases/privilege_delegation/visualize/trust_graph.html">
-        <span class="card-title">trust連鎖の合成とchokepointランキング</span>
-        <span class="card-path">cases/privilege_delegation/visualize/trust_graph.html</span>
-        <span class="card-desc">1件のtrust宣言が既存の経路と合成され権限昇格に至る過程と、対応の優先順位(chokepointランキング)。</span>
+      <a class="card" href="../cases/privilege_delegation/visualize/dashboard.html">
+        <span class="card-title">ケース5ダッシュボード(3タブ)</span>
+        <span class="card-path">cases/privilege_delegation/visualize/dashboard.html</span>
+        <span class="card-desc">「シーンの推移」「trust構造とリスク分析(グラフ・chokepointランキング・blast radius)」「候補スキャン」の3ツールを1ページに統合(D-75)。</span>
       </a>
     </div>
   </section>
-
-  <div class="note">
-    候補trust宣言の総当たりスキャン(<code>scan_candidate_trust_grants</code>、D-65)は、
-    現時点では専用の画面を持たない——<code>cases/privilege_delegation/results/summary.md</code>と
-    <code>smoke_test.py</code>の実行結果としてのみ確認できる(可視化は今後の課題)。
-  </div>
 </div>

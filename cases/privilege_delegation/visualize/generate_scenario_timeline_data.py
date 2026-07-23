@@ -1,6 +1,6 @@
-"""cases/privilege_delegation/visualize/scenario_timeline.html に埋め込む、
+"""cases/privilege_delegation/visualize/dashboard.html(タブ1「シーンの推移」)に埋め込む、
 3シーン構成の推移データを機械的に生成するビルドスクリプト(D-41/D-52/D-57/D-58の
-パターンをケース5に展開)。
+パターンをケース5に展開、D-75で旧scenario_timeline.htmlからdashboard.htmlへ統合)。
 
 python cases/privilege_delegation/visualize/generate_scenario_timeline_data.py で
 (リポジトリルートから)実行する。
@@ -23,7 +23,7 @@ import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _CASE_DIR = Path(__file__).resolve().parent.parent
-_HTML_PATH = Path(__file__).resolve().parent / "scenario_timeline.html"
+_HTML_PATH = Path(__file__).resolve().parent / "dashboard.html"
 _START_MARKER = "/* SCENARIOS_DATA_START (generate_scenario_timeline_data.py が機械的に更新する、手編集禁止) */"
 _END_MARKER = "/* SCENARIOS_DATA_END */"
 

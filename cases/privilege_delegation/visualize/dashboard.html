@@ -1,0 +1,1107 @@
+<title>ケース5ダッシュボード — IAM委任チェーンの権限昇格</title>
+<style>
+  :root {
+    --bg: #f3f1ec; --panel: #ffffff; --panel-2: #ece9e2; --border: #d8d3c8;
+    --text: #23211d; --text-muted: #6b6558; --text-faint: #a29c8c;
+    --actual: #b2502a; --actual-bg: #f6e4da;
+    --cf: #3a6ea8; --cf-bg: #dde7f2;
+    --accent-active: #b8860f; --accent-active-bg: #f7ecd0;
+    --accent-safe: #1f8a68; --accent-safe-bg: #dcf1e9;
+    --accent-danger: #b2502a; --accent-danger-bg: #f6e4da;
+    --accent-new: #a6472e;
+    --accent-origin: #3a6ea8; --accent-origin-bg: #dde7f2;
+    --scene-build: #e2ded2; --scene-deviate: #f3d9cf;
+    --ref-line: #8a8471;
+    --edge: #b7b0a1; --edge-active: #b8860f; --edge-new: #a6472e;
+    --shadow: 0 1px 2px rgba(35,33,29,0.06), 0 8px 24px rgba(35,33,29,0.06);
+    --font-display: -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", "Consolas", "Menlo", monospace;
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161b; --panel: #1b1e25; --panel-2: #21242c; --border: #2e323c;
+    --text: #e9e6de; --text-muted: #97917f; --text-faint: #6b6658;
+    --actual: #ec8c62; --actual-bg: #3a2419;
+    --cf: #7ba7d9; --cf-bg: #1c2c3d;
+    --accent-active: #e8bc4e; --accent-active-bg: #382d13;
+    --accent-safe: #4bd3a4; --accent-safe-bg: #16332a;
+    --accent-danger: #ec8c62; --accent-danger-bg: #3a2419;
+    --accent-new: #ff8f6b;
+    --accent-origin: #7ba7d9; --accent-origin-bg: #1c2c3d;
+    --scene-build: #262a33; --scene-deviate: #3a2a24;
+    --ref-line: #706a58;
+    --edge: #3d414c; --edge-active: #e8bc4e; --edge-new: #ff8f6b;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161b; --panel: #1b1e25; --panel-2: #21242c; --border: #2e323c;
+      --text: #e9e6de; --text-muted: #97917f; --text-faint: #6b6658;
+      --actual: #ec8c62; --actual-bg: #3a2419;
+      --cf: #7ba7d9; --cf-bg: #1c2c3d;
+      --accent-active: #e8bc4e; --accent-active-bg: #382d13;
+      --accent-safe: #4bd3a4; --accent-safe-bg: #16332a;
+      --accent-danger: #ec8c62; --accent-danger-bg: #3a2419;
+      --accent-new: #ff8f6b;
+      --accent-origin: #7ba7d9; --accent-origin-bg: #1c2c3d;
+      --scene-build: #262a33; --scene-deviate: #3a2a24;
+      --ref-line: #706a58;
+      --edge: #3d414c; --edge-active: #e8bc4e; --edge-new: #ff8f6b;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-display); padding: 28px; min-height: 100vh; }
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+  header { display: flex; flex-direction: column; gap: 6px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-faint); }
+  h1 { font-size: 24px; font-weight: 650; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .sub { color: var(--text-muted); font-size: 14px; max-width: 72ch; line-height: 1.55; margin: 2px 0 0; }
+  .sub code { font-family: var(--font-mono); font-size: 12.5px; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+  .tab {
+    font-family: var(--font-display); font-size: 13.5px; font-weight: 600; color: var(--text-muted);
+    background: none; border: none; border-bottom: 2px solid transparent; padding: 10px 14px; cursor: pointer;
+    transition: color 150ms ease, border-color 150ms ease;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent-active); border-bottom-color: var(--accent-active); }
+  .tab:focus-visible { outline: 2px solid var(--accent-active); outline-offset: 2px; }
+  .view { display: none; flex-direction: column; gap: 18px; }
+  .view.active { display: flex; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .tg-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 880px) { .tg-grid { grid-template-columns: 1fr; } }
+
+  .controls { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  button {
+    font-family: var(--font-display); font-size: 13px; font-weight: 600; border-radius: 7px; padding: 7px 13px;
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer;
+    transition: background 150ms ease, border-color 150ms ease, transform 80ms ease;
+  }
+  button:hover { border-color: var(--accent-active); }
+  button:active { transform: translateY(1px); }
+  button:focus-visible { outline: 2px solid var(--accent-active); outline-offset: 2px; }
+  button.primary { background: var(--accent-active); border-color: var(--accent-active); color: #22190a; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  .round-count, .step-count { margin-left: auto; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+  .scenario-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+  .scenario-btn {
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+    padding: 7px 12px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text-muted); cursor: pointer;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .scenario-btn:hover { border-color: var(--accent-active); color: var(--text); }
+  .scenario-btn.active { background: var(--accent-active-bg); border-color: var(--accent-active); color: var(--accent-active); }
+  .scenario-btn:focus-visible { outline: 2px solid var(--accent-active); outline-offset: 2px; }
+
+  .scrubber-wrap { padding: 4px 16px 0; }
+  input[type="range"] { width: 100%; accent-color: var(--accent-active); }
+
+  .charts { padding: 14px 18px 4px; }
+  .chart-label { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin: 6px 0 2px; }
+  svg.chart { width: 100%; height: auto; display: block; }
+  .gridline { stroke: var(--border); stroke-width: 1; }
+  .refline { stroke: var(--ref-line); stroke-width: 1.4; stroke-dasharray: 4 3; }
+  .axis-label { font-family: var(--font-mono); font-size: 9.5px; fill: var(--text-faint); }
+  .line-actual { fill: none; stroke: var(--actual); stroke-width: 2.2; }
+  .line-cf { fill: none; stroke: var(--cf); stroke-width: 2; stroke-dasharray: 5 3; }
+  .dot-actual { fill: var(--actual); }
+  .dot-cf { fill: var(--cf); }
+  .now-line { stroke: var(--accent-active); stroke-width: 1.4; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px 20px; padding: 10px 18px 16px; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .swatch-line { width: 16px; height: 2px; border-radius: 2px; }
+  .swatch-line.actual { background: var(--actual); }
+  .swatch-band { width: 11px; height: 11px; border-radius: 3px; }
+
+  .tg-legend { display: flex; flex-wrap: wrap; gap: 14px 20px; padding: 14px 18px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); }
+  .tg-legend-item { display: flex; align-items: center; gap: 7px; }
+  .swatch { width: 11px; height: 11px; border-radius: 50%; border: 1.6px solid; flex: none; }
+  .swatch.safe { background: var(--accent-safe-bg); border-color: var(--accent-safe); }
+  .swatch.danger { background: var(--accent-danger-bg); border-color: var(--accent-danger); }
+  .swatch.active { background: var(--accent-active-bg); border-color: var(--accent-active); }
+  .swatch.idle { background: var(--panel-2); border-color: var(--edge); }
+  .swatch.new { background: var(--panel-2); border-color: var(--edge-new); border-style: dashed; }
+  .swatch.origin { background: var(--accent-origin-bg); border-color: var(--accent-origin); }
+
+  .side { display: flex; flex-direction: column; gap: 14px; }
+  .detail { padding: 14px 16px; }
+  .detail h2, .summary h2, .verdict-box h2, .chokepoint-box h2, .blast-box h2, .cand-box h2 { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin: 0 0 10px; font-weight: 650; }
+  .detail-row { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-row .k { color: var(--text-muted); }
+  .detail-row .v { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pill { display: inline-flex; align-items: center; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
+  .pill.ok { background: var(--cf-bg); color: var(--cf); }
+  .pill.bad { background: var(--actual-bg); color: var(--actual); }
+
+  .scene-tag { display: inline-flex; align-items: center; font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+
+  .summary { padding: 14px 16px; border-top: 1px solid var(--border); }
+  .summary-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+  .summary-row .v { font-family: var(--font-mono); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .summary-row.actual .v { color: var(--actual); }
+  .summary-row.cf .v { color: var(--cf); }
+  .verdict { margin-top: 10px; padding: 9px 11px; border-radius: 7px; background: var(--panel-2); border: 1px solid var(--border); font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+  .verdict b { color: var(--text); }
+
+  .source { padding: 12px 16px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); line-height: 1.6; }
+  .source code { color: var(--text-muted); }
+
+  .stage { padding: 6px 6px 0; }
+  .stage svg { width: 100%; height: auto; display: block; }
+
+  .node circle { fill: var(--panel-2); stroke: var(--edge); stroke-width: 1.6; transition: fill 420ms ease, stroke 420ms ease, filter 420ms ease; }
+  .node.state-idle circle { fill: var(--panel-2); stroke: var(--edge); }
+  .node.state-active circle { fill: var(--accent-active-bg); stroke: var(--accent-active); stroke-width: 2.4; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent-active) 55%, transparent)); }
+  .node.state-safe circle { fill: var(--accent-safe-bg); stroke: var(--accent-safe); stroke-width: 2.2; }
+  .node.state-danger circle { fill: var(--accent-danger-bg); stroke: var(--accent-danger); stroke-width: 2.6; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent-danger) 55%, transparent)); }
+  .node.state-origin circle { fill: var(--accent-origin-bg); stroke: var(--accent-origin); stroke-width: 3; filter: drop-shadow(0 0 9px color-mix(in srgb, var(--accent-origin) 60%, transparent)); }
+
+  .node text.label { font-family: var(--font-mono); font-size: 13px; font-weight: 600; fill: var(--text); }
+  .node text.role { font-family: var(--font-mono); font-size: 9.5px; fill: var(--text-faint); letter-spacing: 0.02em; }
+  .node text.tag { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em; }
+  .node.state-safe text.tag { fill: var(--accent-safe); }
+  .node.state-danger text.tag { fill: var(--accent-danger); }
+  .node.state-active text.tag { fill: var(--accent-active); }
+  .node.state-idle text.tag { fill: var(--text-faint); }
+  .node.state-origin text.tag { fill: var(--accent-origin); }
+
+  .node.clickable { cursor: pointer; }
+  .node.clickable:hover circle { stroke-width: 2.6; }
+
+  .edge path { fill: none; stroke: var(--edge); stroke-width: 1.6; transition: stroke 380ms ease, stroke-width 380ms ease, filter 380ms ease; marker-end: url(#arrow); }
+  .edge.active path { stroke: var(--edge-active); stroke-width: 2.6; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--edge-active) 60%, transparent)); marker-end: url(#arrow-active); }
+  .edge.new path { stroke: var(--edge-new); stroke-width: 2.4; stroke-dasharray: 5 3; marker-end: url(#arrow-new); }
+  .edge.hidden path { opacity: 0; }
+
+  .tg-verdict { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-muted); padding: 9px 11px; border-radius: 7px; background: var(--panel-2); border: 1px solid var(--border); line-height: 1.55; }
+  .tg-verdict b { color: var(--text); }
+  .tg-verdict.show-danger { border-color: var(--accent-danger); }
+
+  .log { padding: 14px 16px; display: flex; flex-direction: column; gap: 9px; max-height: 340px; overflow-y: auto; }
+  .log-entry { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; color: var(--text-muted); padding-left: 14px; border-left: 2px solid var(--border); opacity: 0; transform: translateY(3px); animation: entry-in 320ms ease forwards; }
+  .log-entry.current { color: var(--text); border-left-color: var(--accent-active); }
+  .log-entry b { color: var(--text); font-weight: 700; }
+  .log-entry .safe { color: var(--accent-safe); font-weight: 700; }
+  .log-entry .danger { color: var(--accent-danger); font-weight: 700; }
+  @keyframes entry-in { to { opacity: 1; transform: translateY(0); } }
+
+  .verdict-box { padding: 14px 16px; border-top: 1px solid var(--border); }
+
+  .chokepoint-box { padding: 14px 16px; border-top: 1px solid var(--border); }
+  .chokepoint-hint, .blast-hint, .cand-hint { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 0 0 10px; }
+  table.chokepoint, table.cand-grid { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 12px; }
+  table.chokepoint th, table.cand-grid th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); font-weight: 650; padding: 0 6px 6px; border-bottom: 1px solid var(--border); }
+  table.chokepoint td, table.cand-grid td { padding: 6px 6px; border-bottom: 1px solid var(--border); color: var(--text-muted); }
+  table.chokepoint tr:last-child td, table.cand-grid tr:last-child td { border-bottom: none; }
+  table.chokepoint tr.rank-1 td { color: var(--text); font-weight: 700; }
+  table.chokepoint td.rank-num { color: var(--text-faint); }
+  table.chokepoint tr.rank-1 td.rank-num { color: var(--accent-danger); }
+  table.chokepoint td.edge-cell { color: var(--text); }
+  .chokepoint-footnote, .cand-footnote { font-size: 11px; color: var(--text-faint); line-height: 1.5; margin: 8px 0 0; }
+
+  .blast-box, .cand-box { padding: 14px 16px; border-top: 1px solid var(--border); }
+  .blast-result, .cand-detail { display: none; }
+  .blast-result-row, .cand-detail-row { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .blast-result-row:last-child, .cand-detail-row:last-child { border-bottom: none; }
+  .blast-result-row .k, .cand-detail-row .k { color: var(--text-muted); }
+  .blast-result-row .v, .cand-detail-row .v { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .blast-pill, .cand-pill { display: inline-flex; align-items: center; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
+  .blast-pill.ok, .cand-pill.safe { background: var(--accent-safe-bg); color: var(--accent-safe); }
+  .blast-pill.bad, .cand-pill.danger { background: var(--accent-danger-bg); color: var(--accent-danger); }
+
+  .cand-callout { margin: 0 0 14px; padding: 11px 14px; border-radius: 9px; background: var(--accent-active-bg); border: 1px solid var(--accent-active); font-size: 13px; color: var(--text); line-height: 1.55; }
+  .cand-grid-wrap { overflow-x: auto; padding: 4px 16px 16px; }
+  table.cand-grid { min-width: 520px; }
+  table.cand-grid th:first-child { color: var(--text-faint); font-weight: 500; }
+  td.cand-cell { text-align: center; cursor: pointer; transition: background 150ms ease; }
+  td.cand-cell:hover { background: var(--panel-2); }
+  td.cand-cell.na { color: var(--text-faint); cursor: default; }
+  td.cand-cell.na:hover { background: none; }
+  td.cand-excess { font-weight: 700; font-variant-numeric: tabular-nums; margin-left: 4px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .node circle, .edge path { transition-duration: 1ms !important; }
+    .log-entry { animation-duration: 1ms !important; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">SMAS — cases/privilege_delegation — 可視化ダッシュボード</span>
+    <h1>trust宣言の合成が生む権限昇格のリスクを、3つの視点で見る</h1>
+    <p class="sub">
+      誰も虚偽申告していないのに、複数の個別には正当なtrust宣言が合成されることで、誰も
+      意図しない権限昇格経路が生まれる(confused deputy、D-60)。
+      <code>① シーンの推移</code>で実際に発生した経緯を時系列で、
+      <code>② trust構造とリスク分析</code>でグラフ構造・chokepointランキング・
+      blast radiusを、<code>③ 候補スキャン</code>でまだ起きていない危険な組み合わせの
+      事前チェックを、それぞれ実行結果そのままに再生する。数値は捏造せず転記。
+    </p>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-view="timeline" role="tab" aria-selected="true">① シーンの推移</button>
+    <button class="tab" data-view="trust" role="tab" aria-selected="false">② trust構造とリスク分析</button>
+    <button class="tab" data-view="candidates" role="tab" aria-selected="false">③ 候補スキャン</button>
+  </div>
+
+  <!-- ================= Tab 1: シーンの推移(旧scenario_timeline.html) ================= -->
+  <div class="view active" id="view-timeline">
+    <div class="scenario-picker" id="scenario-picker"></div>
+    <div class="grid">
+      <div class="panel">
+        <div class="controls">
+          <button id="btn-reset">最初から</button>
+          <button id="btn-prev">◂ 戻る</button>
+          <button id="btn-play" class="primary">▸ 再生</button>
+          <button id="btn-next">次へ ▸</button>
+          <span class="round-count" id="round-count"></span>
+        </div>
+        <div class="scrubber-wrap">
+          <input type="range" id="scrubber" min="0" max="1" value="0" step="1" aria-label="ラウンド">
+        </div>
+        <div class="charts">
+          <div class="chart-label" id="top-chart-label"></div>
+          <svg class="chart" id="chart-top" viewBox="0 0 760 190" xmlns="http://www.w3.org/2000/svg"></svg>
+          <div class="chart-label" id="bottom-chart-label"></div>
+          <svg class="chart" id="chart-utility" viewBox="0 0 760 190" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div class="legend" id="legend"></div>
+      </div>
+
+      <div class="side">
+        <div class="panel">
+          <div class="detail">
+            <h2>このラウンド</h2>
+            <div id="detail-body"></div>
+          </div>
+          <div class="summary">
+            <h2 id="summary-title">最終結果</h2>
+            <div id="summary-body"></div>
+            <div class="verdict" id="verdict"></div>
+          </div>
+          <div class="source" id="source"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Tab 2: trust構造とリスク分析(旧trust_graph.html) ================= -->
+  <div class="view" id="view-trust">
+    <div class="tg-grid">
+      <div class="panel">
+        <div class="stage">
+          <svg viewBox="0 0 720 460" xmlns="http://www.w3.org/2000/svg" aria-label="trustグラフ">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"></path>
+              </marker>
+              <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="var(--edge-active)"></path>
+              </marker>
+              <marker id="arrow-new" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="var(--edge-new)"></path>
+              </marker>
+            </defs>
+
+            <g class="edges">
+              <g class="edge" data-edge="build_svc-ci_svc"><path d="M185,335 L345,265"></path></g>
+              <g class="edge" data-edge="ci_svc-deploy_svc"><path d="M415,240 L545,150"></path></g>
+              <g class="edge hidden" data-edge="ci_svc-admin"><path d="M415,265 L545,345"></path></g>
+            </g>
+
+            <g class="nodes">
+              <g class="node state-idle" data-node="intern_svc" transform="translate(120,130)">
+                <circle r="30"></circle>
+                <text class="label" y="-4" text-anchor="middle">intern_svc</text>
+                <text class="role" y="10" text-anchor="middle">tier0(孤立)</text>
+                <text class="tag" y="46" text-anchor="middle">—</text>
+              </g>
+              <g class="node state-idle" data-node="build_svc" transform="translate(150,340)">
+                <circle r="32"></circle>
+                <text class="label" y="-4" text-anchor="middle">build_svc</text>
+                <text class="role" y="10" text-anchor="middle">起点(tier1)</text>
+                <text class="tag" y="48" text-anchor="middle">—</text>
+              </g>
+              <g class="node state-idle" data-node="ci_svc" transform="translate(380,255)">
+                <circle r="32"></circle>
+                <text class="label" y="-4" text-anchor="middle">ci_svc</text>
+                <text class="role" y="10" text-anchor="middle">tier1</text>
+                <text class="tag" y="48" text-anchor="middle">—</text>
+              </g>
+              <g class="node state-idle" data-node="deploy_svc" transform="translate(580,130)">
+                <circle r="30"></circle>
+                <text class="label" y="-4" text-anchor="middle">deploy_svc</text>
+                <text class="role" y="10" text-anchor="middle">tier2</text>
+                <text class="tag" y="46" text-anchor="middle">—</text>
+              </g>
+              <g class="node state-idle" data-node="admin" transform="translate(580,360)">
+                <circle r="32"></circle>
+                <text class="label" y="-4" text-anchor="middle">admin</text>
+                <text class="role" y="10" text-anchor="middle">tier3</text>
+                <text class="tag" y="48" text-anchor="middle">—</text>
+              </g>
+            </g>
+          </svg>
+        </div>
+        <div class="tg-legend">
+          <span class="tg-legend-item"><span class="swatch idle"></span>未確認</span>
+          <span class="tg-legend-item"><span class="swatch active"></span>たどり中(たどっている辺)</span>
+          <span class="tg-legend-item"><span class="swatch safe"></span>意図された上限内</span>
+          <span class="tg-legend-item"><span class="swatch danger"></span>権限昇格(上限超過)</span>
+          <span class="tg-legend-item"><span class="swatch new"></span>シーン2で追加された宣言</span>
+          <span class="tg-legend-item"><span class="swatch origin"></span>侵害されたと仮定したエージェント</span>
+          <span class="tg-legend-item">矢印: assumeできる方向(なりすませる側→なりすまされる側。trustを宣言したのは矢印の<b>先</b>)</span>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="panel">
+          <div class="controls">
+            <button id="tg-btn-reset">最初から</button>
+            <button id="tg-btn-prev">戻る</button>
+            <button id="tg-btn-next" class="primary">次へ ▸</button>
+            <span class="step-count" id="tg-step-count">0 / 0</span>
+          </div>
+          <div class="log" id="tg-log"></div>
+          <div class="verdict-box">
+            <h2>build_svcの到達可能tier</h2>
+            <div class="tg-verdict" id="tg-verdict">ステップを進めると表示されます。</div>
+          </div>
+          <div class="chokepoint-box">
+            <h2>chokepointランキング</h2>
+            <p class="chokepoint-hint" id="tg-chokepoint-hint">
+              権限昇格ゼロは目標にならない(2ホップの正当な到達は許容している)。
+              最終ステップまで進めると、限られた対応リソースをどのtrust宣言の
+              見直しに振り向けるべきかのランキングが表示される。
+            </p>
+            <table class="chokepoint" id="tg-chokepoint-table" style="display:none;">
+              <thead>
+                <tr><th>順位</th><th>edge(なりすませる側→なりすまされる側)</th><th>解消件数</th><th>超過tier削減</th></tr>
+              </thead>
+              <tbody id="tg-chokepoint-body"></tbody>
+            </table>
+            <p class="chokepoint-footnote" id="tg-chokepoint-footnote" style="display:none;">
+              * 解消件数 = このedge(trust宣言)を1件だけ取り除いた場合に、権限昇格状態から
+              抜けるエージェントの数。矢印の向きは上のグラフと同じ「assumeできる方向」に
+              揃えている(trust宣言そのものの向き=「誰が誰を信頼したか」とは逆になる点に注意)。
+            </p>
+          </div>
+          <div class="blast-box">
+            <h2>blast radius探索</h2>
+            <p class="blast-hint" id="tg-blast-hint">
+              グラフ上のノードをクリックすると、そのエージェントの資格情報が今まさに
+              侵害されたと仮定した場合の被害範囲(blast radius)を表示する。
+            </p>
+            <div class="blast-result" id="tg-blast-result">
+              <div class="blast-result-row">
+                <span class="k">侵害されたと仮定</span><span class="v" id="tg-blast-origin"></span>
+              </div>
+              <div class="blast-result-row">
+                <span class="k">到達範囲</span><span class="v" id="tg-blast-reachable"></span>
+              </div>
+              <div class="blast-result-row">
+                <span class="k">到達最大tier</span><span class="v" id="tg-blast-tier"></span>
+              </div>
+              <div class="blast-result-row">
+                <span class="k">意図された上限を超過?</span>
+                <span class="v"><span class="blast-pill" id="tg-blast-exceeds-pill"></span></span>
+              </div>
+              <div class="blast-result-row">
+                <span class="k">想定外の被害範囲</span><span class="v" id="tg-blast-exposure"></span>
+              </div>
+            </div>
+          </div>
+          <div class="source">
+            入力: <code>ci_svc.delegate_to="build_svc", deploy_svc.delegate_to="ci_svc"</code>
+            (シーン1)+ <code>admin.delegate_to="ci_svc"</code>(シーン2で追加)<br>
+            出典: cases/privilege_delegation/smoke_test.py・generate_results_summary.py と同じ設定
+            (chokepointランキングは<code>analysis.rank_chokepoint_edges()</code>の実行結果)
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Tab 3: 候補スキャン(新規) ================= -->
+  <div class="view" id="view-candidates">
+    <div class="grid">
+      <div class="panel">
+        <div class="cand-box" style="border-top:none;">
+          <h2>まだ無い候補trust宣言、12件の総当たり</h2>
+          <p class="cand-hint">
+            <code>analysis.scan_candidate_trust_grants()</code>が実際に計算した結果(シーン1の
+            平常時宣言を出発点に、まだtrustを与えていない3エージェント(admin・build_svc・
+            intern_svc)× 他4エージェント=12件の候補を評価)。行が「新たにtrustを与える側
+            (truster)」、列が「trustされる側(trusted)」。セルをクリックすると詳細を表示する。
+          </p>
+          <div class="cand-callout">
+            <b>実際に選んだシナリオは最悪ではなかった</b>: シーン2で注入したadmin→ci_svc
+            (超過+2)より危険な候補が2件存在する——admin→deploy_svc・admin→intern_svc
+            (いずれも超過+3)。手で選ぶ1シナリオだけでは、より深刻な組み合わせを
+            見落としうることを、総当たりスキャンが具体的に示した。
+          </div>
+        </div>
+        <div class="cand-grid-wrap">
+          <table class="cand-grid">
+            <thead>
+              <tr>
+                <th>truster ↓ / trusted →</th>
+                <th>admin</th><th>deploy_svc</th><th>ci_svc</th><th>build_svc</th><th>intern_svc</th>
+              </tr>
+            </thead>
+            <tbody id="cand-grid-body"></tbody>
+          </table>
+        </div>
+        <p class="cand-footnote" style="padding:0 16px 16px;">
+          凡例: <span class="cand-pill safe">安全</span> = 到達可能性は変化しない(is_safe=True)。
+          <span class="cand-pill danger">危険+N</span> = 超過tierの合計がN増える(is_safe=False)。
+          「—」は対角(自分自身への信頼、候補として評価対象外)。
+        </p>
+      </div>
+
+      <div class="side">
+        <div class="panel">
+          <div class="cand-box" style="border-top:none;">
+            <h2>選択した候補の詳細</h2>
+            <p class="cand-hint" id="cand-detail-hint">グリッドのセルをクリックすると、この候補を追加した場合の内訳が表示される。</p>
+            <div class="cand-detail" id="cand-detail">
+              <div class="cand-detail-row"><span class="k">候補</span><span class="v" id="cand-detail-edge"></span></div>
+              <div class="cand-detail-row"><span class="k">判定</span><span class="v"><span class="cand-pill" id="cand-detail-pill"></span></span></div>
+              <div class="cand-detail-row"><span class="k">超過tier</span><span class="v" id="cand-detail-excess"></span></div>
+              <div class="cand-detail-row"><span class="k">新たに昇格するエージェント</span><span class="v" id="cand-detail-escalated"></span></div>
+            </div>
+          </div>
+          <div class="cand-box">
+            <h2>tierの位置と危険度の構造的な対応</h2>
+            <div id="cand-tier-summary"></div>
+          </div>
+          <div class="source">
+            出典: <code>analysis.scan_candidate_trust_grants()</code>の実行結果(シーン1の
+            平常時宣言、config.yamlの5エージェント構成)。smoke_test.pyで同じ12件・
+            上位候補・admin全危険/intern_svc全安全のアサーションを確認済み(D-65)。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var tabs = document.querySelectorAll(".tab");
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      tabs.forEach(function (t) { t.classList.remove("active"); t.setAttribute("aria-selected", "false"); });
+      tab.classList.add("active");
+      tab.setAttribute("aria-selected", "true");
+      document.querySelectorAll(".view").forEach(function (v) { v.classList.remove("active"); });
+      document.getElementById("view-" + tab.dataset.view).classList.add("active");
+    });
+  });
+})();
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  /* SCENARIOS_DATA_START (generate_scenario_timeline_data.py が機械的に更新する、手編集禁止) */
+  var SCENARIOS = {
+  "three_scene_demo": {
+    "label": "3シーンデモ(合成リスク注入 vs 反実仮想)",
+    "hasCounterfactual": true,
+    "scenes": [
+      {
+        "name": "scene1_baseline",
+        "label": "平常時",
+        "rounds": [
+          1,
+          3
+        ],
+        "color": "var(--scene-build)"
+      },
+      {
+        "name": "scene2_trust_injected",
+        "label": "合成リスク注入(1件のtrust宣言追加)",
+        "rounds": [
+          4,
+          6
+        ],
+        "color": "var(--scene-deviate)"
+      }
+    ],
+    "N": 6,
+    "topChartLabel": "build_svcの到達可能tier",
+    "topSeriesActual": [
+      2,
+      2,
+      2,
+      3,
+      3,
+      3
+    ],
+    "topSeriesRef": 2,
+    "topSeriesRefLabel": "意図された上限(intended_max_tier)",
+    "wonActual": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ],
+    "wonLabel": "権限昇格の発生?",
+    "wonGoodValue": false,
+    "utilActual": [
+      0,
+      0,
+      0,
+      2,
+      2,
+      2
+    ],
+    "utilCf": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "bottomChartLabel": "昇格したエージェント数",
+    "bottomRowLabelActual": "昇格数(実際)",
+    "bottomRowLabelCf": "昇格数(注入した宣言が無かった場合)",
+    "bottomSummaryLabelActual": "実際",
+    "bottomSummaryLabelCf": "注入した宣言が無かった場合",
+    "verdictText": "誰も虚偽申告していないのに権限昇格が発生する(D-60): シーン2でadminの1件のtrust宣言(単独では局所的に正当)を追加すると、既存の正直な宣言と合成され、build_svc・ci_svcがadmin相当の権限に到達する(昇格数=2件)。その1件を取り除けば昇格は完全に消える(反実仮想=昇格数0件)——単一の弱いリンク(root cause)が全体の脆弱性を決めている、confused deputyの典型例。"
+  }
+};
+  /* SCENARIOS_DATA_END */
+
+  var scenarioOrder = Object.keys(SCENARIOS);
+  var currentScenarioId = scenarioOrder[0];
+  var current = 0; // 0 = before round1
+  var playing = false;
+  var playTimer = null;
+
+  var scrubber = document.getElementById("scrubber");
+  var roundCount = document.getElementById("round-count");
+  var detailBody = document.getElementById("detail-body");
+  var chartTop = document.getElementById("chart-top");
+  var chartUtility = document.getElementById("chart-utility");
+
+  function scenario() { return SCENARIOS[currentScenarioId]; }
+
+  function sceneForRound(r) {
+    var s = scenario();
+    for (var i = 0; i < s.scenes.length; i++) {
+      if (r >= s.scenes[i].rounds[0] && r <= s.scenes[i].rounds[1]) return s.scenes[i];
+    }
+    return s.scenes[0];
+  }
+
+  function renderScenarioPicker() {
+    var picker = document.getElementById("scenario-picker");
+    picker.innerHTML = "";
+    if (scenarioOrder.length <= 1) { picker.style.display = "none"; return; }
+    scenarioOrder.forEach(function (id) {
+      var btn = document.createElement("button");
+      btn.className = "scenario-btn" + (id === currentScenarioId ? " active" : "");
+      btn.textContent = SCENARIOS[id].label;
+      btn.addEventListener("click", function () {
+        stopPlaying();
+        currentScenarioId = id;
+        current = 0;
+        var s = scenario();
+        scrubber.max = s.N;
+        renderScenarioPicker();
+        render();
+      });
+      picker.appendChild(btn);
+    });
+  }
+
+  function renderLegend() {
+    var s = scenario();
+    var parts = ['<span class="legend-item"><span class="swatch-line actual"></span>実際</span>'];
+    if (s.hasCounterfactual) {
+      parts.push('<span class="legend-item"><span class="swatch-line" style="border-top:2px dashed var(--cf);height:0;width:16px;"></span>' + (s.bottomSummaryLabelCf || "反実仮想") + '</span>');
+    }
+    if (s.topSeriesRef !== null && s.topSeriesRef !== undefined) {
+      parts.push('<span class="legend-item"><span class="swatch-line" style="border-top:2px dashed var(--ref-line);height:0;width:16px;"></span>' + (s.topSeriesRefLabel || "参照値") + '</span>');
+    }
+    var seen = {};
+    s.scenes.forEach(function (sc) {
+      if (seen[sc.label]) return;
+      seen[sc.label] = true;
+      parts.push('<span class="legend-item"><span class="swatch-band" style="background:' + sc.color + '"></span>' + sc.label + '</span>');
+    });
+    document.getElementById("legend").innerHTML = parts.join("");
+  }
+
+  function xScale(round, N) { return 44 + (round - 1) / (N - 1) * (760 - 44 - 12); }
+
+  function buildChart(svgEl, s, values, valuesCf, yScale, yTicks, refValue) {
+    var parts = [];
+    var N = s.N;
+    s.scenes.forEach(function (sc) {
+      var x0 = xScale(sc.rounds[0], N) - (sc.rounds[0] === 1 ? 4 : 3);
+      var x1 = xScale(sc.rounds[1], N) + 3;
+      parts.push('<rect x="' + x0 + '" y="8" width="' + (x1 - x0) + '" height="160" fill="' + sc.color + '"></rect>');
+    });
+    yTicks.forEach(function (t) {
+      var y = yScale(t);
+      parts.push('<line class="gridline" x1="40" y1="' + y + '" x2="752" y2="' + y + '"></line>');
+      parts.push('<text class="axis-label" x="4" y="' + (y + 3) + '">' + t + "</text>");
+    });
+    if (refValue !== null && refValue !== undefined) {
+      var yRef = yScale(refValue);
+      parts.push('<line class="refline" x1="40" y1="' + yRef + '" x2="752" y2="' + yRef + '"></line>');
+    }
+    var n = Math.max(current, 1);
+    var ptsActual = [], ptsCf = [];
+    for (var r = 1; r <= n; r++) {
+      ptsActual.push(xScale(r, N) + "," + yScale(values[r - 1]));
+      if (valuesCf) { ptsCf.push(xScale(r, N) + "," + yScale(valuesCf[r - 1])); }
+    }
+    if (current > 0) {
+      if (valuesCf) {
+        parts.push('<polyline class="line-cf" points="' + ptsCf.join(" ") + '"></polyline>');
+      }
+      parts.push('<polyline class="line-actual" points="' + ptsActual.join(" ") + '"></polyline>');
+      var lastR = current;
+      if (valuesCf) {
+        parts.push('<circle class="dot-cf" r="3" cx="' + xScale(lastR, N) + '" cy="' + yScale(valuesCf[lastR - 1]) + '"></circle>');
+      }
+      parts.push('<circle class="dot-actual" r="3.5" cx="' + xScale(lastR, N) + '" cy="' + yScale(values[lastR - 1]) + '"></circle>');
+      parts.push('<line class="now-line" x1="' + xScale(lastR, N) + '" y1="8" x2="' + xScale(lastR, N) + '" y2="168" stroke-dasharray="2 2"></line>');
+    }
+    svgEl.innerHTML = parts.join("");
+  }
+
+  function niceMax(values, valuesCf) {
+    var all = values.slice();
+    if (valuesCf) { all = all.concat(valuesCf); }
+    return Math.max.apply(null, all) * 1.15 || 1;
+  }
+
+  function render() {
+    var s = scenario();
+    var N = s.N;
+    scrubber.max = N;
+    scrubber.value = current;
+    roundCount.textContent = "ラウンド " + current + " / " + N;
+    document.getElementById("top-chart-label").textContent = s.topChartLabel;
+    document.getElementById("bottom-chart-label").textContent = s.bottomChartLabel || "累積効用";
+
+    var topRefList = (s.topSeriesRef !== null && s.topSeriesRef !== undefined) ? [s.topSeriesRef] : null;
+    var topMax = niceMax(s.topSeriesActual, topRefList);
+    var utilMax = niceMax(s.utilActual, s.utilCf);
+    function yScaleTop(v) { return 168 - (v / topMax) * 148; }
+    function yScaleUtil(v) { return 168 - (v / utilMax) * 148; }
+    var topTicks = [0, Math.round(topMax / 3), Math.round((topMax * 2) / 3)];
+    var utilTicks = [0, Math.round(utilMax / 3), Math.round((utilMax * 2) / 3)];
+
+    buildChart(chartTop, s, s.topSeriesActual, null, yScaleTop, topTicks, s.topSeriesRef);
+    buildChart(chartUtility, s, s.utilActual, s.utilCf, yScaleUtil, utilTicks, null);
+    renderLegend();
+
+    var wonLabel = s.wonLabel || "当選?";
+    var wonGoodValue = (s.wonGoodValue === false) ? false : true;
+    var bottomRowActual = s.bottomRowLabelActual || "累積効用(実際)";
+    var bottomRowCf = s.bottomRowLabelCf || "累積効用(反実仮想)";
+
+    if (current === 0) {
+      detailBody.innerHTML = '<div class="detail-row"><span class="k">開始前</span><span class="v">再生かスクラバーで進めてください</span></div>';
+    } else {
+      var idx = current - 1;
+      var scene = sceneForRound(current);
+      var isGood = wonGoodValue ? s.wonActual[idx] : !s.wonActual[idx];
+      var rows =
+        '<div class="detail-row"><span class="k">シーン</span><span class="scene-tag" style="background:' + scene.color + '">' + scene.label + '</span></div>' +
+        '<div class="detail-row"><span class="k">' + s.topChartLabel + '</span><span class="v">' + s.topSeriesActual[idx].toFixed(2) + '</span></div>' +
+        '<div class="detail-row"><span class="k">' + wonLabel + '</span><span class="v"><span class="pill ' + (isGood ? "ok" : "bad") + '">' + (s.wonActual[idx] ? "YES" : "NO") + '</span></span></div>' +
+        '<div class="detail-row"><span class="k">' + bottomRowActual + '</span><span class="v">' + s.utilActual[idx].toFixed(2) + '</span></div>';
+      if (s.utilCf) {
+        rows += '<div class="detail-row"><span class="k">' + bottomRowCf + '</span><span class="v">' + s.utilCf[idx].toFixed(2) + '</span></div>';
+      }
+      detailBody.innerHTML = rows;
+    }
+
+    document.getElementById("summary-title").textContent = "最終結果(ラウンド" + N + "時点)";
+    var summaryLabelActual = s.bottomSummaryLabelActual || "実際";
+    var summaryLabelCf = s.bottomSummaryLabelCf || "反実仮想";
+    var summaryHtml = '<div class="summary-row actual"><span>' + summaryLabelActual + '</span><span class="v">' + s.utilActual[N - 1].toFixed(2) + '</span></div>';
+    if (s.utilCf) {
+      summaryHtml += '<div class="summary-row cf"><span>' + summaryLabelCf + '</span><span class="v">' + s.utilCf[N - 1].toFixed(2) + '</span></div>';
+    }
+    document.getElementById("summary-body").innerHTML = summaryHtml;
+    document.getElementById("verdict").innerHTML = s.verdictText;
+    document.getElementById("source").textContent = "出典: cases/privilege_delegation/visualize/generate_scenario_timeline_data.py の実行結果";
+
+    document.getElementById("btn-prev").disabled = current === 0;
+    document.getElementById("btn-next").disabled = current === N;
+  }
+
+  function stopPlaying() {
+    playing = false;
+    document.getElementById("btn-play").textContent = "▸ 再生";
+    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+  }
+
+  document.getElementById("btn-next").addEventListener("click", function () {
+    var N = scenario().N;
+    if (current < N) { current++; render(); }
+    if (current === N) stopPlaying();
+  });
+  document.getElementById("btn-prev").addEventListener("click", function () {
+    stopPlaying();
+    if (current > 0) { current--; render(); }
+  });
+  document.getElementById("btn-reset").addEventListener("click", function () {
+    stopPlaying();
+    current = 0; render();
+  });
+  document.getElementById("btn-play").addEventListener("click", function () {
+    if (playing) { stopPlaying(); return; }
+    var N = scenario().N;
+    if (current >= N) current = 0;
+    playing = true;
+    document.getElementById("btn-play").textContent = "❚❚ 停止";
+    playTimer = setInterval(function () {
+      if (current >= scenario().N) { stopPlaying(); return; }
+      current++; render();
+    }, 260);
+  });
+  scrubber.addEventListener("input", function () {
+    stopPlaying();
+    current = parseInt(scrubber.value, 10);
+    render();
+  });
+
+  renderScenarioPicker();
+  render();
+})();
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  // incentive_engine.PrivilegeDelegationEngine.resolve_reachable_tiers()が実際に返す
+  // 結果(smoke_test.py・generate_results_summary.pyと同じ設定)を、build_svcを起点に
+  // 手動でステップ分解して再生する。
+  var steps = [
+    { log: "シーン1(平常時)のtrust関係のみが存在する。build_svcが実際にどこまで到達できるかをたどる。", nodes: {}, edges: [], hiddenEdges: ["ci_svc-admin"] },
+
+    { log: "<b>build_svc</b>はci_svcをassumeできる(ci_svc.delegate_to=\"build_svc\")→辺を辿る。", nodes: { build_svc: "active", ci_svc: "active" }, edges: ["build_svc-ci_svc"], hiddenEdges: ["ci_svc-admin"] },
+    { log: "<b>ci_svc</b>はdeploy_svcをassumeできる(deploy_svc.delegate_to=\"ci_svc\")→さらに辿る。", nodes: { build_svc: "active", ci_svc: "active", deploy_svc: "active" }, edges: ["build_svc-ci_svc", "ci_svc-deploy_svc"], hiddenEdges: ["ci_svc-admin"] },
+    { log: "これ以上辿れる相手がいない。到達可能な最大tierはdeploy_svcの<b>tier2</b>——意図された上限(intended_max_tier=2)と<span class=\"safe\">一致</span>、問題なし。", nodes: { build_svc: "safe", ci_svc: "safe", deploy_svc: "safe" }, edges: [], hiddenEdges: ["ci_svc-admin"], tier: 2, verdict: "到達可能tier = <b>2</b>(意図された上限どおり)" },
+
+    { log: "シーン2: <b>admin</b>が新たにci_svcを信頼する(admin.delegate_to=\"ci_svc\", 「CIから緊急時にadminへ」)。単独では局所的に正当な判断。<span class=\"new-note\">新しい辺(ci_svc→admin)が出現。</span>", nodes: { build_svc: "idle", ci_svc: "idle", deploy_svc: "idle" }, edges: [], hiddenEdges: [], newEdges: ["ci_svc-admin"], tier: 2, verdict: "到達可能tier = <b>2</b>(まだたどり直す前)" },
+
+    { log: "build_svcが到達できる範囲を<b>もう一度たどり直す</b>。build_svc→ci_svcは変わらない。", nodes: { build_svc: "active", ci_svc: "active" }, edges: ["build_svc-ci_svc"], newEdges: ["ci_svc-admin"], tier: 2, verdict: "到達可能tier = <b>2</b>(たどり中)" },
+    { log: "ci_svcは今度はdeploy_svcだけでなく<b>admin</b>にもassumeできる(admin.delegate_to=\"ci_svc\")→この辺も辿る。", nodes: { build_svc: "active", ci_svc: "active", deploy_svc: "active", admin: "active" }, edges: ["build_svc-ci_svc", "ci_svc-deploy_svc", "ci_svc-admin"], tier: 3, verdict: "到達可能tier = <b>3</b>(admin相当、たどり中)" },
+    { log: "到達可能な最大tierが<b>3</b>(admin相当)に上昇——意図された上限(2)を<span class=\"danger\">超過</span>。<b>権限昇格が成立</b>。誰も虚偽申告していないのに、2つの独立した正直なtrust宣言(build_svc→ci_svc、ci_svc→admin)がci_svcという1つの中継点を介して合成され、この経路が生まれた(confused deputy)。", nodes: { build_svc: "danger", ci_svc: "danger", deploy_svc: "safe", admin: "danger" }, edges: ["build_svc-ci_svc", "ci_svc-deploy_svc", "ci_svc-admin"], tier: 3, verdict: "到達可能tier = <b>3</b>(意図された上限2を<span class=\"danger\">超過</span>、権限昇格)", final: true }
+  ];
+
+  // analysis.rank_chokepoint_edges()を実際に実行した結果(smoke_test.py・
+  // generate_results_summary.pyで検証済み、D-64)。excess_tier_reduced降順。
+  var chokepointRanking = [
+    { truster: "admin", trusted: "ci_svc", resolved: 2, excessReduced: 2 },
+    { truster: "ci_svc", trusted: "build_svc", resolved: 1, excessReduced: 1 },
+    { truster: "deploy_svc", trusted: "ci_svc", resolved: 0, excessReduced: 0 }
+  ];
+
+  // analysis.compute_blast_radius()を実際に5エージェント全員について実行した結果
+  // (smoke_test.py・generate_results_summary.pyと同じシーン2設定、D-70で検証済み)。
+  var blastRadiusData = {
+    intern_svc: { reachable: ["intern_svc"], maxTier: 0, intended: 0, exceeds: false, exposure: [] },
+    build_svc: { reachable: ["admin", "deploy_svc", "build_svc", "ci_svc"], maxTier: 3, intended: 2, exceeds: true, exposure: ["admin"] },
+    ci_svc: { reachable: ["admin", "deploy_svc", "ci_svc"], maxTier: 3, intended: 2, exceeds: true, exposure: ["admin"] },
+    deploy_svc: { reachable: ["deploy_svc"], maxTier: 2, intended: 2, exceeds: false, exposure: [] },
+    admin: { reachable: ["admin"], maxTier: 3, intended: 3, exceeds: false, exposure: [] }
+  };
+  var edgeEndpoints = {
+    "build_svc-ci_svc": ["build_svc", "ci_svc"],
+    "ci_svc-deploy_svc": ["ci_svc", "deploy_svc"],
+    "ci_svc-admin": ["ci_svc", "admin"]
+  };
+
+  var nodeIds = ["intern_svc", "build_svc", "ci_svc", "deploy_svc", "admin"];
+  var edgeIds = ["build_svc-ci_svc", "ci_svc-deploy_svc", "ci_svc-admin"];
+  var current = 0;
+  var blastOrigin = null; // クリックで選んだ「侵害されたと仮定するエージェント」
+
+  var logEl = document.getElementById("tg-log");
+  var stepCountEl = document.getElementById("tg-step-count");
+  var verdictEl = document.getElementById("tg-verdict");
+  var chokepointTableEl = document.getElementById("tg-chokepoint-table");
+  var chokepointBodyEl = document.getElementById("tg-chokepoint-body");
+  var chokepointHintEl = document.getElementById("tg-chokepoint-hint");
+  var chokepointFootnoteEl = document.getElementById("tg-chokepoint-footnote");
+  var blastHintEl = document.getElementById("tg-blast-hint");
+  var blastResultEl = document.getElementById("tg-blast-result");
+
+  function nodeEl(id) { return document.querySelector('#view-trust .node[data-node="' + id + '"]'); }
+  function edgeEl(id) { return document.querySelector('#view-trust .edge[data-edge="' + id + '"]'); }
+
+  function renderBlastRadius(originId) {
+    var data = blastRadiusData[originId];
+    var reachableSet = {};
+    data.reachable.forEach(function (a) { reachableSet[a] = true; });
+    var exposureSet = {};
+    data.exposure.forEach(function (a) { exposureSet[a] = true; });
+
+    nodeIds.forEach(function (id) {
+      var el = nodeEl(id);
+      var cls, tag;
+      if (id === originId) { cls = "state-origin"; tag = "侵害"; }
+      else if (exposureSet[id]) { cls = "state-danger"; tag = "被害"; }
+      else if (reachableSet[id]) { cls = "state-safe"; tag = "到達"; }
+      else { cls = "state-idle"; tag = "—"; }
+      el.setAttribute("class", "node clickable " + cls);
+      el.querySelector(".tag").textContent = tag;
+    });
+
+    edgeIds.forEach(function (id) {
+      var endpoints = edgeEndpoints[id];
+      var bothReachable = reachableSet[endpoints[0]] && reachableSet[endpoints[1]];
+      var el = edgeEl(id);
+      el.setAttribute("class", bothReachable ? "edge active" : "edge");
+    });
+
+    document.getElementById("tg-blast-origin").textContent = originId;
+    document.getElementById("tg-blast-reachable").textContent = data.reachable.join(", ");
+    document.getElementById("tg-blast-tier").textContent = data.maxTier + "(意図された上限=" + data.intended + ")";
+    var pill = document.getElementById("tg-blast-exceeds-pill");
+    pill.className = "blast-pill " + (data.exceeds ? "bad" : "ok");
+    pill.textContent = data.exceeds ? "YES" : "NO";
+    document.getElementById("tg-blast-exposure").textContent = data.exposure.length ? data.exposure.join(", ") : "なし";
+
+    blastHintEl.style.display = "none";
+    blastResultEl.style.display = "block";
+  }
+
+  function render() {
+    // reset
+    nodeIds.forEach(function (id) {
+      var el = nodeEl(id);
+      el.setAttribute("class", "node state-idle");
+      el.querySelector(".tag").textContent = "—";
+    });
+    edgeIds.forEach(function (id) {
+      var el = edgeEl(id);
+      el.setAttribute("class", "edge hidden");
+    });
+
+    // replay cumulative node/edge states up to `current`
+    var resolved = {};
+    var visibleEdges = {};
+    var newEdges = {};
+    for (var s = 0; s <= current; s++) {
+      var st = steps[s];
+      for (var k in st.nodes) resolved[k] = st.nodes[k];
+      if (st.newEdges) { st.newEdges.forEach(function (eid) { newEdges[eid] = true; }); }
+    }
+    // build_svc-ci_svc・ci_svc-deploy_svcはstep0から可視、ci_svc-adminはnewEdgesに入って初めて可視
+    visibleEdges["build_svc-ci_svc"] = true;
+    visibleEdges["ci_svc-deploy_svc"] = true;
+    if (newEdges["ci_svc-admin"]) { visibleEdges["ci_svc-admin"] = true; }
+
+    nodeIds.forEach(function (id) {
+      if (resolved[id]) {
+        var el = nodeEl(id);
+        el.setAttribute("class", "node state-" + resolved[id]);
+        var tagText = resolved[id] === "safe" ? "SAFE" : resolved[id] === "danger" ? "昇格" : resolved[id] === "active" ? "たどり中" : "—";
+        el.querySelector(".tag").textContent = tagText;
+      }
+    });
+
+    edgeIds.forEach(function (id) {
+      if (visibleEdges[id]) {
+        var el = edgeEl(id);
+        el.setAttribute("class", newEdges[id] ? "edge new" : "edge");
+      }
+    });
+    var activeEdges = steps[current].edges || [];
+    activeEdges.forEach(function (id) {
+      var el = edgeEl(id);
+      if (el) el.setAttribute("class", "edge active");
+    });
+
+    // log
+    logEl.innerHTML = "";
+    for (var i = 0; i <= current; i++) {
+      var div = document.createElement("div");
+      div.className = "log-entry" + (i === current ? " current" : "");
+      div.innerHTML = steps[i].log;
+      logEl.appendChild(div);
+    }
+    logEl.scrollTop = logEl.scrollHeight;
+
+    stepCountEl.textContent = current + " / " + (steps.length - 1);
+
+    var st = steps[current];
+    verdictEl.innerHTML = st.verdict || "ステップを進めると表示されます。";
+    verdictEl.className = "tg-verdict" + (st.final ? " show-danger" : "");
+
+    if (st.final) {
+      chokepointHintEl.style.display = "none";
+      chokepointTableEl.style.display = "";
+      chokepointFootnoteEl.style.display = "";
+      chokepointBodyEl.innerHTML = "";
+      chokepointRanking.forEach(function (row, i) {
+        var tr = document.createElement("tr");
+        tr.className = i === 0 ? "rank-1" : "";
+        tr.innerHTML =
+          '<td class="rank-num">' + (i + 1) + '</td>' +
+          '<td class="edge-cell">' + row.trusted + " → " + row.truster + '</td>' +
+          '<td>' + row.resolved + '件</td>' +
+          '<td>' + row.excessReduced + '</td>';
+        chokepointBodyEl.appendChild(tr);
+      });
+      // 最終ステップに到達したら、全ノードをクリック可能にする(blast radius探索)
+      nodeIds.forEach(function (id) { nodeEl(id).classList.add("clickable"); });
+      if (blastOrigin) {
+        renderBlastRadius(blastOrigin);
+      } else {
+        blastHintEl.style.display = "";
+        blastResultEl.style.display = "none";
+      }
+    } else {
+      chokepointHintEl.style.display = "";
+      chokepointTableEl.style.display = "none";
+      chokepointFootnoteEl.style.display = "none";
+      blastHintEl.style.display = "";
+      blastResultEl.style.display = "none";
+    }
+
+    document.getElementById("tg-btn-prev").disabled = current === 0;
+    document.getElementById("tg-btn-next").disabled = current === steps.length - 1;
+  }
+
+  document.getElementById("tg-btn-next").addEventListener("click", function () {
+    if (current < steps.length - 1) { current++; blastOrigin = null; render(); }
+  });
+  document.getElementById("tg-btn-prev").addEventListener("click", function () {
+    if (current > 0) { current--; blastOrigin = null; render(); }
+  });
+  document.getElementById("tg-btn-reset").addEventListener("click", function () {
+    current = 0; blastOrigin = null; render();
+  });
+
+  nodeIds.forEach(function (id) {
+    nodeEl(id).addEventListener("click", function () {
+      if (!steps[current].final) return; // 最終ステップに到達するまでは探索不可
+      blastOrigin = id;
+      render();
+    });
+  });
+
+  render();
+})();
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  // analysis.scan_candidate_trust_grants()を、シーン1(平常時)の宣言を出発点に
+  // 実際に実行した結果(smoke_test.py・generate_results_summary.pyと同じ設定、D-65で
+  // 検証済み)。12件全て(truster×trustedの組み合わせ)を保持する。
+  var candidates = [
+    { truster: "admin", trusted: "deploy_svc", newlyEscalated: ["build_svc", "ci_svc", "deploy_svc"], excess: 3, safe: false },
+    { truster: "admin", trusted: "intern_svc", newlyEscalated: ["intern_svc"], excess: 3, safe: false },
+    { truster: "admin", trusted: "ci_svc", newlyEscalated: ["build_svc", "ci_svc"], excess: 2, safe: false },
+    { truster: "build_svc", trusted: "intern_svc", newlyEscalated: ["intern_svc"], excess: 2, safe: false },
+    { truster: "admin", trusted: "build_svc", newlyEscalated: ["build_svc"], excess: 1, safe: false },
+    { truster: "build_svc", trusted: "admin", newlyEscalated: [], excess: 0, safe: true },
+    { truster: "build_svc", trusted: "deploy_svc", newlyEscalated: [], excess: 0, safe: true },
+    { truster: "build_svc", trusted: "ci_svc", newlyEscalated: [], excess: 0, safe: true },
+    { truster: "intern_svc", trusted: "admin", newlyEscalated: [], excess: 0, safe: true },
+    { truster: "intern_svc", trusted: "deploy_svc", newlyEscalated: [], excess: 0, safe: true },
+    { truster: "intern_svc", trusted: "ci_svc", newlyEscalated: [], excess: 0, safe: true },
+    { truster: "intern_svc", trusted: "build_svc", newlyEscalated: [], excess: 0, safe: true }
+  ];
+  var tiers = { admin: 3, deploy_svc: 2, ci_svc: 1, build_svc: 1, intern_svc: 0 };
+
+  var rowAgents = ["admin", "build_svc", "intern_svc"];
+  var colAgents = ["admin", "deploy_svc", "ci_svc", "build_svc", "intern_svc"];
+
+  function findCandidate(truster, trusted) {
+    for (var i = 0; i < candidates.length; i++) {
+      var c = candidates[i];
+      if (c.truster === truster && c.trusted === trusted) return c;
+    }
+    return null;
+  }
+
+  var gridBody = document.getElementById("cand-grid-body");
+  gridBody.innerHTML = rowAgents.map(function (truster) {
+    var cells = colAgents.map(function (trusted) {
+      if (truster === trusted) { return '<td class="cand-cell na">—</td>'; }
+      var c = findCandidate(truster, trusted);
+      var pillHtml = c.safe
+        ? '<span class="cand-pill safe">安全</span>'
+        : '<span class="cand-pill danger">危険</span><span class="cand-excess">+' + c.excess + '</span>';
+      return '<td class="cand-cell" data-truster="' + truster + '" data-trusted="' + trusted + '">' + pillHtml + '</td>';
+    }).join("");
+    return '<tr><td>' + truster + '</td>' + cells + '</tr>';
+  }).join("");
+
+  var detailHint = document.getElementById("cand-detail-hint");
+  var detailBox = document.getElementById("cand-detail");
+
+  gridBody.querySelectorAll("td.cand-cell:not(.na)").forEach(function (td) {
+    td.addEventListener("click", function () {
+      var c = findCandidate(td.dataset.truster, td.dataset.trusted);
+      document.getElementById("cand-detail-edge").textContent = td.dataset.trusted + " → " + td.dataset.truster;
+      var pill = document.getElementById("cand-detail-pill");
+      pill.className = "cand-pill " + (c.safe ? "safe" : "danger");
+      pill.textContent = c.safe ? "安全" : "危険";
+      document.getElementById("cand-detail-excess").textContent = "+" + c.excess;
+      document.getElementById("cand-detail-escalated").textContent = c.newlyEscalated.length ? c.newlyEscalated.join(", ") : "なし";
+      detailHint.style.display = "none";
+      detailBox.style.display = "block";
+    });
+  });
+
+  var tierRows = rowAgents.concat(colAgents.filter(function (a) { return rowAgents.indexOf(a) === -1; }));
+  var uniqueAgents = ["admin", "deploy_svc", "ci_svc", "build_svc", "intern_svc"];
+  var tierSummaryHtml = uniqueAgents
+    .slice()
+    .sort(function (a, b) { return tiers[b] - tiers[a]; })
+    .map(function (a) {
+      var asTruster = candidates.filter(function (c) { return c.truster === a; });
+      var summary;
+      if (asTruster.length === 0) {
+        summary = "新規trustの候補としては評価対象外(常にtrusted側)";
+      } else {
+        var dangerCount = asTruster.filter(function (c) { return !c.safe; }).length;
+        summary = dangerCount === asTruster.length
+          ? "誰を信頼しても必ず危険(" + asTruster.length + "件中" + dangerCount + "件)"
+          : dangerCount === 0
+            ? "誰を信頼しても安全(" + asTruster.length + "件中0件が危険)"
+            : dangerCount + "/" + asTruster.length + "件が危険";
+      }
+      return '<div class="detail-row"><span class="k">' + a + '(tier' + tiers[a] + ')</span><span class="v">' + summary + '</span></div>';
+    })
+    .join("");
+  document.getElementById("cand-tier-summary").innerHTML = tierSummaryHtml;
+})();
+</script>
