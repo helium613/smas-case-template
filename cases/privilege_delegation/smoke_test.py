@@ -22,7 +22,7 @@ from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
 from verification_kit.information_asymmetry import LeakDetectingAgent, no_intra_round_leak, total_checks
 
-from analysis import rank_chokepoint_edges
+from analysis import rank_chokepoint_edges, scan_candidate_trust_grants
 from delegation_agents import TrustDeclaringAgent
 from deviation_test import run_scene, run_three_scene_demo
 
@@ -177,6 +177,41 @@ def main() -> None:
         "       (chokepointランキング: "
         + ", ".join(
             f"{c.truster_agent_id}→{c.trusted_agent_id}(解消{c.escalations_resolved}件)" for c in chokepoints
+        )
+        + ")"
+    )
+
+    # --- 候補trust宣言の総当たりスキャン: まだ無い追加のうち何が危険かを事前に判定 -----
+    candidates = scan_candidate_trust_grants(engine, scenes[0].declarations)
+    check(
+        "候補スキャン: 平常時の宣言に対し、trustをまだ与えていない3エージェント"
+        "(admin/build_svc/intern_svc)×他4エージェント=12件の候補全てを評価する",
+        len(candidates) == 12,
+    )
+    check(
+        "候補スキャン: 実際に選んだシナリオ(admin→ci_svc)より危険な候補"
+        "(admin→deploy_svc、admin→intern_svc)が存在し、1位にランクされる"
+        "(手で選んだ1例が必ずしも最悪のケースとは限らない)",
+        candidates[0].excess_introduced == 3
+        and candidates[0].truster_agent_id == "admin"
+        and candidates[0].trusted_agent_id in {"deploy_svc", "intern_svc"},
+    )
+    check(
+        "候補スキャン: admin(最上位tier)が誰を信頼しても必ず危険(4件全てis_safe=False、"
+        "最上位ロールがtrustを与える行為そのものが構造的にリスクを持つ)",
+        all(c.is_safe is False for c in candidates if c.truster_agent_id == "admin"),
+    )
+    check(
+        "候補スキャン: intern_svc(最下位tier)が誰を信頼しても安全(4件全てis_safe=True、"
+        "最下位ロールが他者を信頼しても、他者の到達範囲は広がらない)",
+        all(c.is_safe is True for c in candidates if c.truster_agent_id == "intern_svc"),
+    )
+    print(
+        "       (危険な候補: "
+        + ", ".join(
+            f"{c.truster_agent_id}→{c.trusted_agent_id}(超過+{c.excess_introduced})"
+            for c in candidates
+            if not c.is_safe
         )
         + ")"
     )

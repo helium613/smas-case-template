@@ -28,7 +28,7 @@ from schemas.environment_schema import EnvironmentConfig
 from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
 
-from analysis import rank_chokepoint_edges
+from analysis import rank_chokepoint_edges, scan_candidate_trust_grants
 from delegation_agents import TrustDeclaringAgent
 from deviation_test import run_scene, run_three_scene_demo
 from incentive_engine import PrivilegeDelegationEngine, PrivilegeDelegationParameters
@@ -104,6 +104,13 @@ def main() -> None:
     chokepoints = rank_chokepoint_edges(engine, scenes[-1].declarations)
     chokepoint_elapsed = time.perf_counter() - t0
     top_chokepoint = chokepoints[0]
+
+    # --- 候補trust宣言の総当たりスキャン: まだ無い追加のうち何が危険かを事前に判定 -----
+    t0 = time.perf_counter()
+    candidates = scan_candidate_trust_grants(engine, scenes[0].declarations)
+    candidate_scan_elapsed = time.perf_counter() - t0
+    dangerous_candidates = [c for c in candidates if not c.is_safe]
+    top_candidate = candidates[0]
 
     # --- ⑤: DisCoPy構造検証 -----------------------------------------------------------
     t0 = time.perf_counter()
@@ -216,12 +223,27 @@ def main() -> None:
         f"edge(deploy_svc→ci_svc)は取り除いても解消0件で最下位にランクされ、優先順位づけが"
         f"「昇格に無関係な変更まで一律に警告する」誤検知を起こさないことも確認した。"
     )
+    lines.append(
+        f"- **候補trust宣言の総当たりスキャン(事前チェック)**: chokepointランキングの"
+        f"逆方向として、`scan_candidate_trust_grants`で「まだtrustを与えていない"
+        f"エージェント(admin/build_svc/intern_svc)が、他の誰かを新たに信頼したら」"
+        f"という{len(candidates)}件の候補を総当たりし、{len(dangerous_candidates)}件が"
+        f"危険(is_safe=False)と判定された。1位は`{top_candidate.truster_agent_id}→"
+        f"{top_candidate.trusted_agent_id}`(超過tier+{top_candidate.excess_introduced})——"
+        f"**実際にシーン2で選んだシナリオ(admin→ci_svc、超過+2)は、実は最悪のケースでは"
+        f"なかった**(admin→deploy_svc・admin→intern_svcはいずれも超過+3で、より深刻)。"
+        f"手で選ぶ1シナリオだけでは見落とす、より危険な組み合わせを総当たりスキャンが"
+        f"発見した好例。また、admin(最上位tier)が誰を信頼しても必ず危険"
+        f"(4件全てis_safe=False)、intern_svc(最下位tier)が誰を信頼しても必ず安全"
+        f"(4件全てis_safe=True)という、tierの位置と危険度の構造的な対応も確認できた。"
+    )
     lines.append("")
 
     lines.append("### ④資源コスト: 計算量・実行時間の概算(このマシンでの1回計測、参考値)")
     lines.append(f"- 3シーン構成(平常時x3+合成リスク注入x3、5エージェント): 実測 {scenes_elapsed * 1000:.2f} ms")
     lines.append(f"- モンテカルロ N={mc_summary['n_trials']}試行(6エージェント、ランダムtrust配線): 実測 {montecarlo_elapsed:.3f} 秒")
     lines.append(f"- chokepointランキング({len(chokepoints)}件のtrust宣言を評価): 実測 {chokepoint_elapsed * 1000:.2f} ms")
+    lines.append(f"- 候補trust宣言の総当たりスキャン({len(candidates)}件の候補を評価): 実測 {candidate_scan_elapsed * 1000:.2f} ms")
     lines.append(f"- ⑤DisCoPy構造検証: 実測 {verification_elapsed * 1000:.2f} ms")
     lines.append("- 資源コスト(#24): 分散台帳・検証可能遅延関数等の本番運用コストは技術選定が未決のため対象外。")
     lines.append("")
@@ -278,6 +300,7 @@ def main() -> None:
         f"③シーン2昇格={sorted(scene2_escalated)} / "
         f"③モンテカルロ昇格率={mc_summary['escalation_rate']:.1%} / "
         f"③chokepoint1位={top_chokepoint.truster_agent_id}→{top_chokepoint.trusted_agent_id} / "
+        f"③危険な候補={len(dangerous_candidates)}/{len(candidates)} / "
         f"⑤DisCoPy={disco_py_pass}"
     )
 
