@@ -28,6 +28,7 @@ _CASES = [
     ("proposal_voting", "cases/proposal_voting/results/summary.md"),
     ("liquid_democracy", "cases/liquid_democracy/results/summary.md"),
     ("privilege_delegation", "cases/privilege_delegation/results/summary.md"),
+    ("budget_delegation", "cases/budget_delegation/results/summary.md"),
 ]
 
 _START_MARKER = "/* REPORTS_DATA_START (visualize/embed_reports.py が機械的に更新する、手編集禁止) */"
