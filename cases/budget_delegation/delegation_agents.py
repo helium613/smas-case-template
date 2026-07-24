@@ -30,3 +30,36 @@ class BudgetDelegatingAgent:
             declared_value=self.declared_value,
             reasoning=None,
         )
+
+
+class FanOutBudgetDelegatingAgent:
+    """毎ラウンド、複数の固定委任宣言(delegate_to, declared_value)を同時に
+    繰り返す(ファンアウト、D-80)。
+
+    1つの`Declaration`は引き続き1つのdelegate_toしか持てない(A側は無変更)。
+    ファンアウトは、同じagent_idを持つ複数の`Declaration`をラウンドごとに
+    まとめて提出することで表現する——`PartialDelegationEngine`は複数の
+    出て行くedgeを合計・按分して扱える(D-80)。
+
+    `decide()`はAgentプロトコル互換のため最初の宛先だけを返す。実際に
+    複数宛先を集めるには`decide_all()`を呼ぶ(deviation_test.pyの
+    `_collect_declarations`が対応済み)。
+    """
+
+    def __init__(self, agent_id: str, delegations: list[tuple[str, float]]) -> None:
+        self.agent_id = agent_id
+        self.delegations = delegations  # [(委任先, 宣言額), ...]
+
+    def decide(self, observation: ObservationInput) -> ActionOutput:
+        if not self.delegations:
+            return ActionOutput(action="delegate_budget", delegate_to=None, declared_value=0.0, reasoning=None)
+        target, amount = self.delegations[0]
+        return ActionOutput(action="delegate_budget", delegate_to=target, declared_value=amount, reasoning=None)
+
+    def decide_all(self, observation: ObservationInput) -> list[ActionOutput]:
+        if not self.delegations:
+            return [ActionOutput(action="delegate_budget", delegate_to=None, declared_value=0.0, reasoning=None)]
+        return [
+            ActionOutput(action="delegate_budget", delegate_to=target, declared_value=amount, reasoning=None)
+            for target, amount in self.delegations
+        ]
