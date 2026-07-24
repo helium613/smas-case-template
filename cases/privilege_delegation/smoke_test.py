@@ -17,13 +17,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from environment import EnvironmentClient, WallViolation
 from incentive_engine import PrivilegeDelegationEngine, PrivilegeDelegationParameters
+from schemas.agent_schema import ObservationInput
 from schemas.environment_schema import EnvironmentConfig, Trace
 from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
 from verification_kit.information_asymmetry import LeakDetectingAgent, no_intra_round_leak, total_checks
 
 from analysis import compute_blast_radius, rank_chokepoint_edges, scan_candidate_trust_grants
-from delegation_agents import TrustDeclaringAgent
+from delegation_agents import FanOutTrustDeclaringAgent, TrustDeclaringAgent
 from deviation_test import run_scene, run_three_scene_demo
 
 
@@ -103,6 +104,29 @@ def main() -> None:
     check(
         "②誘因構造層: max_chain_depthを超える連鎖(n0→…→n4のtier9)は到達可能集合に含まれない",
         chain_reachable["n0"] == 0,
+    )
+
+    # --- ②誘因構造層: ファンアウト(1エージェントが複数の宛先に同時にtrustを与える、D-80) ---
+    # adminが同じラウンドで、ci_svcとdeploy_svcの両方にtrustを与える(2件のDeclaration、
+    # 同じagent_id)。エンジン(incentive_engine.py)は無改造で正しく扱えることを確認する
+    # ——BFSの実装がDeclarationを1件ずつ独立に処理するため。
+    fanout_params = PrivilegeDelegationParameters(
+        tiers={"admin": 3, "svc_a": 1, "svc_b": 1},
+        intended_max_tier={"admin": 3, "svc_a": 1, "svc_b": 1},
+        max_chain_depth=10,
+    )
+    fanout_engine = PrivilegeDelegationEngine(fanout_params)
+    fanout_agent = FanOutTrustDeclaringAgent("admin", ["svc_a", "svc_b"])
+    fanout_actions = fanout_agent.decide_all(ObservationInput(trace_summary={}))
+    fanout_declarations = [
+        Declaration(agent_id="admin", delegate_to=action.delegate_to) for action in fanout_actions
+    ] + [Declaration(agent_id="svc_a"), Declaration(agent_id="svc_b")]
+    fanout_outcome = fanout_engine.allocate_and_pay(fanout_declarations)
+    check(
+        "②誘因構造層(ファンアウト): adminが同時にsvc_aとsvc_bの両方にtrustを与えると、"
+        "両方が独立にadmin相当の権限に到達し、両方とも想定外の権限昇格として検出される"
+        "(エンジンは無改造、FanOutTrustDeclaringAgentがDeclarationを複数件に分解するだけ)",
+        set(fanout_outcome.allocated_agent_ids) == {"svc_a", "svc_b"},
     )
 
     # --- ⑤検証層: DisCoPyによる合成則チェック(共通実装) ------------------------------

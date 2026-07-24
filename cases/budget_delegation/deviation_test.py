@@ -49,13 +49,23 @@ class EscalationReport:
 
 
 def _collect_declarations(agents: list[Agent], env: EnvironmentClient, round_id: int) -> list[Declaration]:
+    """申告を収集する。`decide_all`を持つエージェント(ファンアウト対応、D-80)は
+    複数のDeclarationを返す——同じagent_idの複数件が混在しても、エンジン側は
+    合計・按分してそのまま扱える(D-80)。持たないエージェントは従来どおり
+    `decide()`1回で1件。
+    """
     trace_summary = {"round": round_id, "history_size": len(env.read_traces())}
     declarations: list[Declaration] = []
+    observation = ObservationInput(trace_summary=trace_summary)
     for agent in agents:
-        action = agent.decide(ObservationInput(trace_summary=trace_summary))
-        declarations.append(
-            Declaration(agent_id=agent.agent_id, delegate_to=action.delegate_to, declared_value=action.declared_value)
-        )
+        if hasattr(agent, "decide_all"):
+            actions = agent.decide_all(observation)
+        else:
+            actions = [agent.decide(observation)]
+        for action in actions:
+            declarations.append(
+                Declaration(agent_id=agent.agent_id, delegate_to=action.delegate_to, declared_value=action.declared_value)
+            )
     return declarations
 
 

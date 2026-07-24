@@ -19,12 +19,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from environment import EnvironmentClient, WallViolation
 from incentive_engine import PartialDelegationEngine, PartialDelegationParameters
+from schemas.agent_schema import ObservationInput
 from schemas.environment_schema import EnvironmentConfig, Trace
 from schemas.incentive_schema import Declaration
 from verification import run_structural_verification
 from verification_kit.information_asymmetry import LeakDetectingAgent, no_intra_round_leak, total_checks
 
-from delegation_agents import BudgetDelegatingAgent
+from delegation_agents import BudgetDelegatingAgent, FanOutBudgetDelegatingAgent
 from deviation_test import run_three_scene_demo
 
 
@@ -124,6 +125,63 @@ def main() -> None:
         "②誘因構造層: 循環委任があっても想定外の決済余地(金額の超過)としては検出されない"
         "(構造的リスクとして別枠で検出済みのため、金額チェックと二重計上しない)",
         cycle_engine.allocate_and_pay(cycle_declarations).allocated_agent_ids == [],
+    )
+
+    # --- ②誘因構造層: ファンアウト、按分なし(合計が保有額以内、D-80) -----------------
+    # bookingが同じラウンドで、transport(2000円)とdining(1500円)の両方に同時に
+    # 委任する。合計3500円はbookingの保有額45000円を超えないため、両方とも
+    # 宣言どおり全額届く。
+    fanout_params = PartialDelegationParameters(
+        root_budgets={"me": 50000.0, "booking": 0.0, "transport": 0.0, "dining": 0.0},
+        intended_max_budget={"me": 50000.0, "booking": 45000.0, "transport": 2000.0, "dining": 1500.0},
+        max_chain_depth=10,
+    )
+    fanout_engine = PartialDelegationEngine(fanout_params)
+    fanout_agent = FanOutBudgetDelegatingAgent("booking", [("transport", 2000.0), ("dining", 1500.0)])
+    fanout_declarations = [
+        Declaration(agent_id="me", delegate_to="booking", declared_value=45000.0),
+    ] + [
+        Declaration(agent_id="booking", delegate_to=action.delegate_to, declared_value=action.declared_value)
+        for action in fanout_agent.decide_all(ObservationInput(trace_summary={}))
+    ] + [
+        Declaration(agent_id="transport"),
+        Declaration(agent_id="dining"),
+    ]
+    fanout_net = fanout_engine.resolve_reachable_budgets(fanout_declarations)
+    check(
+        "②誘因構造層(ファンアウト、按分なし): bookingがtransport(2000円)とdining"
+        "(1500円)の両方に同時に委任すると、合計(3500円)が保有額(45000円)以内なので"
+        "両方とも宣言どおり全額届く",
+        fanout_net["transport"] == 2000.0 and fanout_net["dining"] == 1500.0,
+    )
+
+    # --- ②誘因構造層: ファンアウト、按分あり(合計が保有額を超える、D-80) -----------------
+    # bookingがtransportとdiningに、それぞれ30000円ずつ(合計60000円)委任しようと
+    # するが、bookingの保有額は45000円しかない。特定の宛先を優先せず、
+    # 全宛先に比例按分する(45000/60000=0.75倍ずつ)。
+    over_fanout_agent = FanOutBudgetDelegatingAgent("booking", [("transport", 30000.0), ("dining", 30000.0)])
+    over_fanout_declarations = [
+        Declaration(agent_id="me", delegate_to="booking", declared_value=45000.0),
+    ] + [
+        Declaration(agent_id="booking", delegate_to=action.delegate_to, declared_value=action.declared_value)
+        for action in over_fanout_agent.decide_all(ObservationInput(trace_summary={}))
+    ] + [
+        Declaration(agent_id="transport"),
+        Declaration(agent_id="dining"),
+    ]
+    over_fanout_net = fanout_engine.resolve_reachable_budgets(over_fanout_declarations)
+    check(
+        "②誘因構造層(ファンアウト、按分あり): 宣言額の合計(60000円)が保有額(45000円)"
+        "を超える場合、特定の宛先を優先せず全宛先に比例按分する"
+        f"(transport={over_fanout_net['transport']:.1f}円、dining={over_fanout_net['dining']:.1f}円、"
+        "いずれも30000×0.75=22500円になるはず)",
+        abs(over_fanout_net["transport"] - 22500.0) < 1e-6 and abs(over_fanout_net["dining"] - 22500.0) < 1e-6,
+    )
+    check(
+        "②誘因構造層(ファンアウト、按分あり): 按分後もbooking自身の保有額を超えて"
+        "委任することはない(送った合計45000円ちょうど、bookingの手元残高は0円)",
+        abs((over_fanout_net["transport"] + over_fanout_net["dining"]) - 45000.0) < 1e-6
+        and abs(over_fanout_net["booking"] - 0.0) < 1e-6,
     )
 
     # --- ⑤検証層: DisCoPyによる合成則チェック(共通実装) ------------------------------
